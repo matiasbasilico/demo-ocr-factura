@@ -1,5 +1,5 @@
 """
-Recepcion inteligente de documentos - Cajadepagos con Claude Sonnet 4
+Recepcion inteligente de documentos - Cajadepagos -   con Claude Sonnet 4
 Aplicación de demostración con chat inteligente para extraer datos de facturas
 Con detección automática de moneda (USD/ARS/EUR/etc) y streaming en chat
 """
@@ -530,34 +530,7 @@ def display_field_with_confidence(label, value, confidence):
     """, unsafe_allow_html=True)
 
 
-def prepare_final_json(data):
-    """Prepara el JSON final para enviar al sistema"""
-    
-    # Detectar moneda del análisis
-    currency = data.get('currency', 'ARS')
-    
-    return {
-        "supplier": data.get('supplier', {}),
-        "client": data.get('client', {}),
-        "currency": currency,
-        "currencySymbol": data.get('currencySymbol', '$'),
-        "invoiceType": data.get('invoiceType'),
-        "invoiceNumber": data.get('invoiceNumber'),
-        "pointSale": data.get('pointSale'),
-        "documentDate": data.get('documentDate'),
-        "dueDate": data.get('dueDate'),
-        "amount": data.get('amount'),
-        "iva": data.get('iva'),
-        "amountGrav": data.get('amountGrav'),
-        "amountNoGrav": data.get('amountNoGrav'),
-        "amountExen": data.get('amountExen'),
-        "cae": data.get('cae'),
-        "taxCode": data.get('taxCode'),
-        "exchangeType": "1",
-        "active": True,
-        "hasPo": False,
-        "items": data.get('items', [])
-    }
+
 
 
 def convert_date_format(date_str):
@@ -584,7 +557,7 @@ def parse_amount(amount_str):
 
 # Configuración de la página
 st.set_page_config(
-    page_title="Invoice Extractor Demo",
+    page_title="Recepcion inteligente de documentos - Cajadepagos Demo",
     page_icon="📄",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -701,7 +674,7 @@ if 'current_file_name' not in st.session_state:
 with st.sidebar:
     # Logo con emoji en vez de imagen
     st.markdown("<h1 style='text-align: center; font-size: 3em;'>📄</h1>", unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align: center;'>Invoice Extractor AI</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center;'>Recepcion inteligente de documentos - Cajadepagos AI</h3>", unsafe_allow_html=True)
     
     # Modo de operación
     operation_mode = st.radio(
@@ -770,7 +743,7 @@ with st.sidebar:
         st.rerun()
 
 # Header principal
-st.markdown('<div class="main-header">📄 Recepcion inteligente de documentos - Cajadepagos</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">📄 Recepcion inteligente de documentos - Cajadepagos -  </div>', unsafe_allow_html=True)
 
 # Tabs principales
 tab1, tab2, tab3 = st.tabs(["💬 Chat Inteligente", "📋 Datos Extraídos", "📄 Vista del PDF"])
@@ -1175,7 +1148,7 @@ with tab3:
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666;">
-    <p>🤖 Powered by Claude Sonnet 4 | 📄 Invoice Extractor v2.1</p>
+    <p>🤖 Powered by Claude Sonnet 4 | 📄 Recepcion inteligente de documentos - Cajadepagos v2.1</p>
     <p style="font-size: 0.9em;">Con layout mejorado, streaming en chat y detección automática de moneda</p>
 </div>
 """, unsafe_allow_html=True)
