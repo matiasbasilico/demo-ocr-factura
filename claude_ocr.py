@@ -1,6 +1,7 @@
 """
 claude_ocr.py
 Extracción inteligente de facturas usando Claude API con detección automática de moneda
+Versión mejorada con soporte para OC, HES, HEM y desglose de IVAs
 """
 
 import anthropic
@@ -14,6 +15,7 @@ def extract_invoice_with_claude(pdf_text, api_key=None):
     Usa Claude API real para extraer datos de forma inteligente.
     Claude analiza el texto completo y extrae campos automáticamente.
     Detecta automáticamente la moneda (USD vs ARS) según el idioma y contexto.
+    Incluye nuevos campos: OC, HES, HEM y desglose de IVAs.
     """
     
     if not api_key:
@@ -103,12 +105,24 @@ CAMPOS A BUSCAR (extrae todos los que encuentres):
 - Moneda detectada (USD, ARS, EUR, etc)
 - Símbolo usado ($, US$, €, etc)
 - Total a pagar (el monto final)
-- Subtotal
-- IVA/Tax/Impuestos (desglosa si hay varios)
+- Subtotal / Importe Neto Gravado
+- Otros Tributos
+- IVA/Tax/Impuestos - DESGLOSE DETALLADO de TODOS los porcentajes:
+  * IVA 0%: $ monto
+  * IVA 2.5%: $ monto
+  * IVA 5%: $ monto
+  * IVA 10.5%: $ monto
+  * IVA 21%: $ monto
+  * IVA 27%: $ monto
 - Monto gravado
 - Monto no gravado
 - Monto exento
-- Otros impuestos o percepciones
+
+**DOCUMENTOS ASOCIADOS (IMPORTANTE):**
+Busca en el detalle de items y extrae si existen:
+- OC (Orden de Compra) - busca "OC:" seguido de número (ej: OC: 4527976895)
+- HES (Hoja de Entrada de Servicio) - busca "HES:" seguido de número (ej: HES: 1024526137)
+- HEM (Hoja de Entrada de Materiales) - busca "HEM:" seguido de número (ej: HEM: 1024526137)
 
 **ITEMS/LÍNEAS (si los hay):**
 - Descripción de cada item
@@ -116,48 +130,62 @@ CAMPOS A BUSCAR (extrae todos los que encuentres):
 - Precio unitario
 - Total por línea
 - Descuentos/bonificaciones
+- Si contiene "OC:" → extrae como orden_compra
+- Si contiene "HES:" → extrae como hoja_entrada_servicio
+- Si contiene "HEM:" → extrae como hoja_entrada_materiales
 
 FORMATO DE RESPUESTA:
 Responde ÚNICAMENTE con un JSON válido (sin ```json, sin markdown, sin explicaciones adicionales) con esta estructura EXACTA:
 
 {{
   "supplier": {{
-    "cuit": "XX-XXXXXXXX-X o Tax ID",
+    "cuit": "30-71017365-2 o Tax ID",
     "name": "Razón Social Exacta Como Aparece",
     "address": "Dirección completa o null",
-    "country": "Argentina|USA|Mexico|etc o null"
+    "country": "Argentina o null"
   }},
   "client": {{
     "name": "Nombre exacto del cliente",
-    "cuit": "XX-XXXXXXXX-X o null",
+    "cuit": "30707542329 o null",
     "address": "Dirección o null",
     "code": "Código de cliente o null"
   }},
   "currency": "ARS",
   "currencySymbol": "$",
   "invoiceType": "A",
-  "invoiceNumber": "0002-01138243",
-  "pointSale": "0002",
-  "cae": "73462440019273",
-  "documentDate": "2023-11-17",
-  "dueDate": "2023-11-27",
+  "invoiceNumber": "00005-00000121",
+  "pointSale": "00005",
+  "cae": "74108913004192",
+  "documentDate": "2024-03-08",
+  "dueDate": "2024-03-18",
   "billingPeriod": {{
-    "from": "2023-11-17",
-    "to": "2023-11-17"
+    "from": "2024-03-01",
+    "to": "2024-03-31"
   }},
-  "amount": 37722.96,
-  "iva": 6546.96,
-  "amountGrav": 31176.00,
+  "amount": 360564.27,
+  "amountGrav": 297987.00,
   "amountNoGrav": 0,
   "amountExen": 0,
-  "otherTaxes": [],
+  "otherTaxes": 0.00,
+  "ivaBreakdown": {{
+    "iva_0": 0.00,
+    "iva_2_5": 0.00,
+    "iva_5": 0.00,
+    "iva_10_5": 0.00,
+    "iva_21": 62577.27,
+    "iva_27": 0.00
+  }},
   "items": [
     {{
-      "description": "Web Hosting Emprendedor...",
+      "description": "Acceso Back Office Portal Proveedores",
       "quantity": 1,
-      "unit_price": 4676.40,
-      "total": 4676.40,
-      "discount": 0
+      "unit_price": 297987.00,
+      "total": 297987.00,
+      "discount": 0,
+      "iva_rate": "21%",
+      "orden_compra": "4527976895",
+      "hoja_entrada_servicio": "1024526137",
+      "hoja_entrada_materiales": null
     }}
   ],
   "confidence": {{
@@ -167,24 +195,31 @@ Responde ÚNICAMENTE con un JSON válido (sin ```json, sin markdown, sin explica
     "invoice_number": 0.99,
     "invoice_type": 0.95,
     "amount": 0.99,
-    "currency": 0.95
+    "currency": 0.95,
+    "iva_breakdown": 0.98,
+    "orden_compra": 0.95,
+    "hoja_entrada_servicio": 0.95
   }},
   "reasoning": {{
-    "supplier_name": "Encontré 'Dattatec.com S.R.L.' en el encabezado",
+    "supplier_name": "Encontré 'FRENCHELI GUSTAVO LEANDRO' como proveedor",
     "invoice_type": "Encontré 'Código 01' que corresponde a Factura Tipo A según AFIP",
-    "amount": "Total de $37,722.96 claramente marcado como 'TOTAL $'",
-    "currency": "Detecté ARS porque: (1) documento en español, (2) CUIT argentino, (3) CAE presente"
+    "amount": "Total de $360,564.27 claramente marcado como 'Importe Total'",
+    "currency": "Detecté ARS porque: (1) documento en español, (2) CUIT argentino presente, (3) CAE presente",
+    "iva_breakdown": "Desglosé los IVAs encontrados: IVA 21%: $62,577.27 (otros 0)",
+    "orden_compra": "Encontré OC: 4527976895 en el detalle de items",
+    "hoja_entrada_servicio": "Encontré HES: 1024526137 en el detalle de items"
   }}
 }}
 
 REGLAS IMPORTANTES:
 - Fechas SIEMPRE en formato YYYY-MM-DD
-- Montos como números float (ej: 37722.96), NO strings
+- Montos como números float (ej: 297987.00), NO strings
 - Si un campo no existe en el documento, usa null
 - NO inventes información que no esté en el texto
 - La confianza debe reflejar qué tan seguro estás (0.0 = nada seguro, 1.0 = completamente seguro)
 - En reasoning, explica BREVEMENTE cómo encontraste los campos más importantes
-- Para currency, explica DETALLADAMENTE las pistas que usaste (idioma, referencias geográficas, códigos fiscales)
+- Para ivaBreakdown, extrae TODOS los porcentajes mencionados (0%, 2.5%, 5%, 10.5%, 21%, 27%)
+- Para OC, HES, HEM: solo incluye si están presentes en el documento, sino usa null
 """
 
     try:
@@ -219,6 +254,8 @@ REGLAS IMPORTANTES:
             result['confidence'] = {}
         if 'reasoning' not in result:
             result['reasoning'] = {}
+        if 'ivaBreakdown' not in result:
+            result['ivaBreakdown'] = {}
         
         # Asegurar que tenga moneda (default ARS si no detecta)
         if 'currency' not in result:
@@ -245,16 +282,24 @@ REGLAS IMPORTANTES:
 def test_extraction():
     """Función de prueba"""
     sample_text = """
-    Dattatec.com S.R.L.
-    CUIT: 30-71017365-2
-    Factura A Nº 0002-01138243
+    FRENCHELI GUSTAVO LEANDRO
+    CUIT: 20232505088
+    Factura A Nº 00005-00000121
     Código 01
-    Fecha: 17/11/2023
+    Fecha: 08/03/2024
     
-    Cliente: omnihub sas
-    Total: $37,722.96
-    IVA: $6,546.96
-    CAE: 73462440019273
+    Cliente: LAN ARGENTINA SOCIEDAD ANONIMA
+    CUIT: 30707542329
+    
+    Acceso Back Office Portal Proveedores
+    OC: 4527976895
+    HES: 1024526137
+    
+    Importe Neto Gravado: $ 297987,00
+    IVA 21%: $ 62577,27
+    Importe Total: $ 360564,27
+    
+    CAE: 74108913004192
     """
     
     try:

@@ -1,5 +1,5 @@
 """
-Invoice Extractor - Demo Interactivo con Claude Sonnet 4
+Recepcion inteligente de documentos - Cajadepagos con Claude Sonnet 4
 Aplicación de demostración con chat inteligente para extraer datos de facturas
 Con detección automática de moneda (USD/ARS/EUR/etc) y streaming en chat
 """
@@ -770,7 +770,7 @@ with st.sidebar:
         st.rerun()
 
 # Header principal
-st.markdown('<div class="main-header">📄 Invoice Extractor - Demo Interactivo</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">📄 Recepcion inteligente de documentos - Cajadepagos</div>', unsafe_allow_html=True)
 
 # Tabs principales
 tab1, tab2, tab3 = st.tabs(["💬 Chat Inteligente", "📋 Datos Extraídos", "📄 Vista del PDF"])
