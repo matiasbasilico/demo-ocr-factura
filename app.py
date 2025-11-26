@@ -678,21 +678,36 @@ with st.sidebar:
     st.markdown("<h1 style='text-align: center; font-size: 3em;'>📄</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align: center;'>Invoice Extractor AI</h3>", unsafe_allow_html=True)
     
-    st.markdown("### ⚙️ Configuración")
+    #st.markdown("### ⚙️ Configuración")
     
     # Modo de operación
-    operation_mode = st.radio(
-        "Modo de operación:",
-        ["🎭 Demo (Sin API)", "🚀 Producción (Con API)"],
-        help="Demo usa Claude directamente en el navegador. Producción usa tu endpoint de AWS."
-    )
+    #operation_mode = st.radio(
+    #    "Modo de operación:",
+    #    ["🎭 Demo (Sin API)", "🚀 Producción (Con API)"],
+    #    help="Demo usa Claude directamente en el navegador. Producción usa tu endpoint de AWS."
+    3)
     
-    if operation_mode == "🚀 Producción (Con API)":
-        api_endpoint = st.text_input(
-            "API Endpoint:",
-            placeholder="https://xxxxx.execute-api.us-east-1.amazonaws.com/prod/process-invoice"
-        )
-    
+    #if operation_mode == "🚀 Producción (Con API)":
+    #    api_endpoint = st.text_input(
+    #        "API Endpoint:",
+    #        placeholder="https://xxxxx.execute-api.us-east-1.amazonaws.com/prod/process-invoice"
+    #    )
+    st.markdown("---")
+    st.markdown("### 🔍 Estado del Sistema")
+
+    # Verificar si Claude API está disponible
+    try:
+        import os
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if api_key:
+            st.success("✅ Claude API: Activo")
+            st.caption(f"Key: ...{api_key[-8:]}")
+        else:
+            st.warning("⚠️ Claude API: No configurado")
+            st.caption("Usando modo regex básico")
+    except:
+        st.error("❌ Claude API: Error")
+        
     st.markdown("---")
     st.markdown("### 📊 Estadísticas")
     st.metric("Facturas procesadas", len(st.session_state.messages) // 2)
