@@ -1,7 +1,7 @@
 """
 Invoice Extractor - Demo Interactivo con Claude Sonnet 4
 Aplicación de demostración con chat inteligente para extraer datos de facturas
-Con detección automática de moneda (USD/ARS/EUR/etc)
+Con detección automática de moneda (USD/ARS/EUR/etc) y streaming en chat
 """
 
 import streamlit as st
@@ -234,6 +234,7 @@ def generate_initial_analysis_message(data):
 def generate_chat_response(user_input, extracted_data, pdf_text):
     """
     Genera una respuesta conversacional basada en la pregunta del usuario.
+    Ahora con soporte para streaming.
     """
     user_input_lower = user_input.lower()
     
@@ -497,7 +498,7 @@ Los montos totales son correctos, solo que no están desglosados línea por lín
 
 
 def display_field_with_confidence(label, value, confidence):
-    """Muestra un campo con su nivel de confianza"""
+    """Muestra un campo con su nivel de confianza - AHORA VERTICAL"""
     
     if confidence >= 0.95:
         conf_class = "confidence-high"
@@ -580,7 +581,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS personalizado
+# CSS personalizado - MEJORADO PARA LAYOUT VERTICAL
 st.markdown("""
 <style>
     .main-header {
@@ -611,7 +612,7 @@ st.markdown("""
         background-color: #E8F5E9;
         padding: 1rem;
         border-radius: 0.5rem;
-        margin: 0.5rem 0;
+        margin: 0.75rem 0;
         border-left: 4px solid #4CAF50;
         color: #1B5E20;
     }
@@ -629,6 +630,21 @@ st.markdown("""
     .confidence-low {
         color: #C62828;
         font-weight: bold;
+    }
+    .section-group {
+        background-color: #F5F5F5;
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        border-left: 5px solid #1976D2;
+    }
+    .section-title {
+        font-size: 1.2rem;
+        font-weight: bold;
+        color: #1565C0;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #1976D2;
     }
     .json-output {
         background-color: #263238;
@@ -678,16 +694,14 @@ with st.sidebar:
     st.markdown("<h1 style='text-align: center; font-size: 3em;'>📄</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align: center;'>Invoice Extractor AI</h3>", unsafe_allow_html=True)
     
-    #st.markdown("### ⚙️ Configuración")
-    
     # Modo de operación
     operation_mode = st.radio(
         "Modo de operación:",
-        ["🎭 Demo (Sin API)", "🚀 Producción ()"],
+        ["🎭 Demo (Sin API)", "🚀 Producción"],
         help="Demo usa Claude directamente en el navegador. Producción usa CDP."
     )
     
-    if operation_mode == "🚀 Producción ()":
+    if operation_mode == "🚀 Producción":
         api_endpoint = st.text_input(
             "API Endpoint:",
             placeholder="https://cajadepagos.execute-api.us-east-1.amazonaws.com/prod/process-invoice"
@@ -848,25 +862,46 @@ with tab1:
                 </div>
                 """, unsafe_allow_html=True)
     
-    # Input de chat
+    # Input de chat con streaming
     if st.session_state.extracted_data:
         user_input = st.chat_input("Pregúntame sobre los campos detectados...")
         
         if user_input:
-            # Agregar mensaje del usuario
+            # Agregar mensaje del usuario inmediatamente
             st.session_state.messages.append({
                 "role": "user",
                 "content": user_input
             })
             
-            # Generar respuesta de Claude
-            with st.spinner("🤔 Claude está pensando..."):
+            # Mostrar el mensaje del usuario en el chat
+            st.markdown(f"""
+            <div class="chat-message user-message">
+                <b>👤 Tú:</b><br>
+                {user_input}
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Generar respuesta de Claude con streaming
+            with st.chat_message("assistant"):
+                message_placeholder = st.empty()
+                
+                # Generar la respuesta
                 response = generate_chat_response(
                     user_input, 
                     st.session_state.extracted_data,
                     st.session_state.pdf_text
                 )
                 
+                # Simular streaming del texto
+                displayed_text = ""
+                for char in response:
+                    displayed_text += char
+                    message_placeholder.markdown(displayed_text + "▌")
+                
+                # Mostrar el texto final sin el cursor
+                message_placeholder.markdown(response)
+                
+                # Guardar el mensaje en el historial
                 st.session_state.messages.append({
                     "role": "assistant",
                     "content": response
@@ -961,102 +996,131 @@ with tab2:
         if currency_reasoning:
             st.info(f"💭 **¿Cómo detecté la moneda?** {currency_reasoning}")
         
-        # Mostrar campos en categorías
-        col1, col2 = st.columns(2)
+        # INFORMACIÓN DEL PROVEEDOR - VERTICAL
+        st.markdown("""
+        <div class="section-group">
+            <div class="section-title">🏢 Información del Proveedor</div>
+        </div>
+        """, unsafe_allow_html=True)
         
-        with col1:
-            st.markdown("#### 🏢 Información del Proveedor")
-            display_field_with_confidence(
-                "CUIT", 
-                data.get('supplier', {}).get('cuit', 'No detectado'),
-                data.get('confidence', {}).get('supplier_cuit', 0.95)
-            )
-            display_field_with_confidence(
-                "Razón Social",
-                data.get('supplier', {}).get('name', 'No detectado'),
-                data.get('confidence', {}).get('supplier_name', 0.90)
-            )
-            display_field_with_confidence(
-                "Dirección",
-                data.get('supplier', {}).get('address', 'No detectado'),
-                data.get('confidence', {}).get('supplier_address', 0.85)
-            )
+        display_field_with_confidence(
+            "CUIT", 
+            data.get('supplier', {}).get('cuit', 'No detectado'),
+            data.get('confidence', {}).get('supplier_cuit', 0.95)
+        )
+        display_field_with_confidence(
+            "Razón Social",
+            data.get('supplier', {}).get('name', 'No detectado'),
+            data.get('confidence', {}).get('supplier_name', 0.90)
+        )
+        display_field_with_confidence(
+            "Dirección",
+            data.get('supplier', {}).get('address', 'No detectado'),
+            data.get('confidence', {}).get('supplier_address', 0.85)
+        )
+        
+        # INFORMACIÓN DEL CLIENTE - VERTICAL
+        if data.get('client', {}).get('name'):
+            st.markdown("""
+            <div class="section-group">
+                <div class="section-title">👤 Información del Cliente</div>
+            </div>
+            """, unsafe_allow_html=True)
             
-            # Información del cliente
-            if data.get('client', {}).get('name'):
-                st.markdown("#### 👤 Información del Cliente")
+            display_field_with_confidence(
+                "Nombre",
+                data.get('client', {}).get('name', 'No detectado'),
+                data.get('confidence', {}).get('client_name', 0.90)
+            )
+            if data.get('client', {}).get('code'):
                 display_field_with_confidence(
-                    "Nombre",
-                    data.get('client', {}).get('name', 'No detectado'),
-                    data.get('confidence', {}).get('client_name', 0.90)
+                    "Código",
+                    data.get('client', {}).get('code', 'No detectado'),
+                    0.95
                 )
-                if data.get('client', {}).get('code'):
-                    display_field_with_confidence(
-                        "Código",
-                        data.get('client', {}).get('code', 'No detectado'),
-                        0.95
-                    )
-            
-            st.markdown("#### 📄 Información de la Factura")
-            display_field_with_confidence(
-                "Tipo",
-                data.get('invoiceType', 'No detectado'),
-                data.get('confidence', {}).get('invoice_type', 0.98)
-            )
-            display_field_with_confidence(
-                "Número",
-                data.get('invoiceNumber', 'No detectado'),
-                data.get('confidence', {}).get('invoice_number', 0.95)
-            )
-            display_field_with_confidence(
-                "Punto de Venta",
-                data.get('pointSale', 'No detectado'),
-                data.get('confidence', {}).get('point_sale', 0.90)
-            )
-            display_field_with_confidence(
-                "CAE",
-                data.get('cae', 'No detectado'),
-                data.get('confidence', {}).get('cae', 0.92)
-            )
         
-        with col2:
-            st.markdown("#### 📅 Fechas")
-            display_field_with_confidence(
-                "Fecha de Emisión",
-                data.get('documentDate', 'No detectado'),
-                data.get('confidence', {}).get('document_date', 0.95)
-            )
-            display_field_with_confidence(
-                "Fecha de Vencimiento",
-                data.get('dueDate', 'No detectado'),
-                data.get('confidence', {}).get('due_date', 0.90)
-            )
-            
-            st.markdown(f"#### 💰 Montos ({currency})")
-            display_field_with_confidence(
-                "Total",
-                f"{currency_symbol}{data.get('amount') or 0:,.2f}" if data.get('amount') is not None else "No detectado",
-                data.get('confidence', {}).get('amount', 0.98)
-            )
-            display_field_with_confidence(
-                "IVA",
-                f"{currency_symbol}{data.get('iva') or 0:,.2f}" if data.get('iva') is not None else "No detectado",
-                data.get('confidence', {}).get('iva', 0.95)
-            )
-            display_field_with_confidence(
-                "Subtotal Gravado",
-                f"{currency_symbol}{data.get('amountGrav') or 0:,.2f}" if data.get('amountGrav') is not None else "No detectado",
-                data.get('confidence', {}).get('amount_grav', 0.90)
-            )
-            display_field_with_confidence(
-                "No Gravado",
-                f"{currency_symbol}{data.get('amountNoGrav') or 0:,.2f}" if data.get('amountNoGrav') is not None else "No detectado",
-                data.get('confidence', {}).get('amount_no_grav', 0.85)
-            )
+        # INFORMACIÓN DE LA FACTURA - VERTICAL
+        st.markdown("""
+        <div class="section-group">
+            <div class="section-title">📄 Información de la Factura</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        display_field_with_confidence(
+            "Tipo",
+            data.get('invoiceType', 'No detectado'),
+            data.get('confidence', {}).get('invoice_type', 0.98)
+        )
+        display_field_with_confidence(
+            "Número",
+            data.get('invoiceNumber', 'No detectado'),
+            data.get('confidence', {}).get('invoice_number', 0.95)
+        )
+        display_field_with_confidence(
+            "Punto de Venta",
+            data.get('pointSale', 'No detectado'),
+            data.get('confidence', {}).get('point_sale', 0.90)
+        )
+        display_field_with_confidence(
+            "CAE",
+            data.get('cae', 'No detectado'),
+            data.get('confidence', {}).get('cae', 0.92)
+        )
+        
+        # FECHAS - VERTICAL
+        st.markdown("""
+        <div class="section-group">
+            <div class="section-title">📅 Fechas</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        display_field_with_confidence(
+            "Fecha de Emisión",
+            data.get('documentDate', 'No detectado'),
+            data.get('confidence', {}).get('document_date', 0.95)
+        )
+        display_field_with_confidence(
+            "Fecha de Vencimiento",
+            data.get('dueDate', 'No detectado'),
+            data.get('confidence', {}).get('due_date', 0.90)
+        )
+        
+        # MONTOS - VERTICAL
+        st.markdown(f"""
+        <div class="section-group">
+            <div class="section-title">💰 Montos ({currency})</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        display_field_with_confidence(
+            "Total",
+            f"{currency_symbol}{data.get('amount') or 0:,.2f}" if data.get('amount') is not None else "No detectado",
+            data.get('confidence', {}).get('amount', 0.98)
+        )
+        display_field_with_confidence(
+            "IVA",
+            f"{currency_symbol}{data.get('iva') or 0:,.2f}" if data.get('iva') is not None else "No detectado",
+            data.get('confidence', {}).get('iva', 0.95)
+        )
+        display_field_with_confidence(
+            "Subtotal Gravado",
+            f"{currency_symbol}{data.get('amountGrav') or 0:,.2f}" if data.get('amountGrav') is not None else "No detectado",
+            data.get('confidence', {}).get('amount_grav', 0.90)
+        )
+        display_field_with_confidence(
+            "No Gravado",
+            f"{currency_symbol}{data.get('amountNoGrav') or 0:,.2f}" if data.get('amountNoGrav') is not None else "No detectado",
+            data.get('confidence', {}).get('amount_no_grav', 0.85)
+        )
         
         # Items/Líneas
         if data.get('items'):
-            st.markdown("#### 📦 Items de la Factura")
+            st.markdown("""
+            <div class="section-group">
+                <div class="section-title">📦 Items de la Factura</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
             items_df = []
             for i, item in enumerate(data['items'], 1):
                 items_df.append({
@@ -1070,7 +1134,11 @@ with tab2:
             st.dataframe(items_df, use_container_width=True)
         
         # JSON completo
-        st.markdown("#### 📤 JSON para tu Sistema")
+        st.markdown("""
+        <div class="section-group">
+            <div class="section-title">📤 JSON para tu Sistema</div>
+        </div>
+        """, unsafe_allow_html=True)
         
         # Preparar JSON final
         final_json = prepare_final_json(data)
@@ -1114,7 +1182,7 @@ with tab3:
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666;">
-    <p>🤖 Powered by Claude Sonnet 4 | 📄 Invoice Extractor v2.0</p>
-    <p style="font-size: 0.9em;">Con detección automática de moneda y chat inteligente</p>
+    <p>🤖 Powered by Claude Sonnet 4 | 📄 Invoice Extractor v2.1</p>
+    <p style="font-size: 0.9em;">Con layout mejorado, streaming en chat y detección automática de moneda</p>
 </div>
 """, unsafe_allow_html=True)
