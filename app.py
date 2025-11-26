@@ -1,5 +1,5 @@
 """
-Invoice Extractor - Demo Interactivo con Claude Sonnet 4
+Invoice Extractor Caja de Pagos - Demo Interactivo con Claude Sonnet 4
 Aplicación de demostración con chat inteligente para extraer datos de facturas
 Con detección automática de moneda (USD/ARS/EUR/etc)
 """
@@ -471,7 +471,7 @@ def parse_amount(amount_str):
 
 # Configuración de la página
 st.set_page_config(
-    page_title="Invoice Extractor Demo",
+    page_title="Invoice Extractor Caja de Pagos Demo",
     page_icon="📄",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -571,7 +571,7 @@ if 'pdf_text' not in st.session_state:
 with st.sidebar:
     # Logo con emoji en vez de imagen
     st.markdown("<h1 style='text-align: center; font-size: 3em;'>📄</h1>", unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align: center;'>Invoice Extractor AI</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center;'>Invoice Extractor Caja de Pagos AI</h3>", unsafe_allow_html=True)
     
     st.markdown("### ⚙️ Configuración")
     
@@ -625,7 +625,7 @@ with st.sidebar:
         st.rerun()
 
 # Header principal
-st.markdown('<div class="main-header">📄 Invoice Extractor - Demo Interactivo</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">📄 Invoice Extractor Caja de Pagos - Demo Interactivo</div>', unsafe_allow_html=True)
 
 # Tabs principales
 tab1, tab2, tab3 = st.tabs(["💬 Chat Inteligente", "📋 Datos Extraídos", "📄 Vista del PDF"])
@@ -637,8 +637,18 @@ with tab1:
         type=['pdf'],
         help="Formatos soportados: PDF (digital o escaneado)"
     )
+
+    current_file_name = uploaded_file.name if uploaded_file else None
+    previous_file_name = st.session_state.get('current_file_name', None)
     
-    if uploaded_file is not None and st.session_state.pdf_data is None:
+    if uploaded_file is not None and (st.session_state.pdf_data is None or current_file_name != previous_file_name):
+        # Limpiar conversación si es un archivo diferente
+        if current_file_name != previous_file_name:
+            st.session_state.messages = []
+            st.session_state.extracted_data = None
+        
+        # Guardar el nombre del archivo actual
+        st.session_state.current_file_name = current_file_name
         # Procesar el PDF
         with st.spinner("🔍 Analizando factura..."):
             # Leer PDF
@@ -979,7 +989,7 @@ with tab3:
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666;">
-    <p>🤖 Powered by Claude Sonnet 4 | 📄 Invoice Extractor v2.0</p>
+    <p>🤖 Powered by Claude Sonnet 4 | 📄 Invoice Extractor Caja de Pagos v2.0</p>
     <p style="font-size: 0.9em;">Con detección automática de moneda (USD/ARS/EUR)</p>
 </div>
 """, unsafe_allow_html=True)
