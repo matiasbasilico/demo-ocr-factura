@@ -159,8 +159,7 @@ He identificado los siguientes campos con alta confianza:
 - Pídeme que explique cómo lo detecté
 - Solicita que revise algún dato que te parezca dudoso
 
-¿Hay algo en particular que quieras que revise? 🤔
-"""
+¿Hay algo en particular que quieras que revise? 🤔"""
     
     return message
 
@@ -331,7 +330,7 @@ def display_field_with_confidence(label, value, confidence):
     else:
         conf_class = "confidence-low"
         icon = "❌"
-        
+
     if confidence > 1:
         confidence = confidence / 100
 
