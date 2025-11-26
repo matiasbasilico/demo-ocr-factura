@@ -681,17 +681,17 @@ with st.sidebar:
     #st.markdown("### ⚙️ Configuración")
     
     # Modo de operación
-    #operation_mode = st.radio(
-    #    "Modo de operación:",
-    #    ["🎭 Demo (Sin API)", "🚀 Producción (Con API)"],
-    #    help="Demo usa Claude directamente en el navegador. Producción usa tu endpoint de AWS."
-    #3)
+    operation_mode = st.radio(
+        "Modo de operación:",
+        ["🎭 Demo (Sin API)", "🚀 Producción ()"],
+        help="Demo usa Claude directamente en el navegador. Producción usa CDP."
+    )
     
-    #if operation_mode == "🚀 Producción (Con API)":
-    #    api_endpoint = st.text_input(
-    #        "API Endpoint:",
-    #        placeholder="https://xxxxx.execute-api.us-east-1.amazonaws.com/prod/process-invoice"
-    #    )
+    if operation_mode == "🚀 Producción ()":
+        api_endpoint = st.text_input(
+            "API Endpoint:",
+            placeholder="https://cajadepagos.execute-api.us-east-1.amazonaws.com/prod/process-invoice"
+        )
     st.markdown("---")
     st.markdown("### 🔍 Estado del Sistema")
 
