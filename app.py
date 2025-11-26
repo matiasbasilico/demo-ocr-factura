@@ -757,7 +757,7 @@ with tab2:
             st.dataframe(items_df, use_container_width=True)
         
         # JSON completo
-        st.markdown("#### 📤 JSON para tu Sistema")
+        st.markdown("#### 📤 JSON para Caja de Pagos")
         
         # Preparar JSON final
         final_json = prepare_final_json(data)
