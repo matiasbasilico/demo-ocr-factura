@@ -257,24 +257,19 @@ El CUIT tiene el formato correcto (XX-XXXXXXXX-X) y está claramente identificad
         return f"""Te explico cómo identifiqué los montos:
 
 {currency_emoji} **Moneda detectada:** {currency} ({currency_symbol})
-{currency_reasoning_safe}
 
 💰 **Total Final:** {currency_symbol}{amount:,.2f} {currency}
 - Encontré este valor en la sección "Total a Pagar" del documento
 - Confianza: {confidence:.0%}
 
 📊 **Desglose:**
-- Subtotal Gravado: {currency_symbol}{subtotal:,.2f}
-- IVA/Impuestos: {currency_symbol}{iva:,.2f}
+{"- Subtotal Gravado: " + currency_symbol + f"{subtotal:,.2f}" if subtotal else "- Subtotal: No detectado"}
+{"- IVA/Impuestos: " + currency_symbol + f"{iva:,.2f}" if iva else "- IVA: No detectado"}
 
-✅ **Verificación:** El total coincide con la suma de subtotal + impuestos
+**¿Por qué {currency}?**
+El documento está en español y contiene referencias a AFIP/CUIT argentino, por lo tanto los montos son en pesos argentinos (ARS).
 
-Los montos están claramente marcados en la factura y el formato numérico es correcto. En este caso particular, la confianza es muy alta porque:
-1. Los valores están en posiciones estándar del documento
-2. El formato de moneda es consistente
-3. Las matemáticas cuadran (subtotal + IVA = total)
-
-¿Necesitas que revise algún otro aspecto de los montos?"""
+¿Necesitas que revise algún otro aspecto?"""
     
     elif 'dudoso' in user_input_lower or 'seguro' in user_input_lower or 'confianza' in user_input_lower:
         low_confidence_fields = []
