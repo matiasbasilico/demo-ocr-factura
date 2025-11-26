@@ -1114,7 +1114,6 @@ with tab2:
             if iva_breakdown and any(iva_breakdown.values()):
                 st.markdown("**📊 Desglose de IVAs Detectados:**")
                 
-                # Crear tabla de IVAs con montos en 2 columnas
                 iva_rates = [
                     ('iva_0', '0%'),
                     ('iva_2_5', '2.5%'),
@@ -1140,7 +1139,7 @@ with tab2:
                             """, unsafe_allow_html=True)
                         col_idx += 1
             
-            # Otros Tributos si existen
+            # Otros Tributos
             other_taxes = data.get('otherTaxes', 0)
             if other_taxes and other_taxes > 0:
                 display_field_with_confidence(
