@@ -497,8 +497,17 @@ Los montos totales son correctos, solo que no están desglosados línea por lín
 ¿Qué te gustaría saber específicamente? Puedo darte detalles sobre cualquiera de estos aspectos. 🤔"""
 
 
+
+
+
+
 def display_field_with_confidence(label, value, confidence):
-    """Muestra un campo con su nivel de confianza - AHORA VERTICAL"""
+    """Muestra un campo con su nivel de confianza
+    Si el valor contiene "No detectado", automáticamente setea confianza a 0%"""
+    
+    # Si detecta "No detectado" en el valor, fuerza confianza a 0
+    if "No detectado" in str(value):
+        confidence = 0
     
     if confidence >= 0.95:
         conf_class = "confidence-high"
