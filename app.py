@@ -12,405 +12,6 @@ import requests
 from PIL import Image
 import PyPDF2
 
-# Configuración de la página
-st.set_page_config(
-    page_title="Invoice Extractor Demo",
-    page_icon="📄",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# CSS personalizado
-st.markdown("""
-<style>
-    .main-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #FF6B6B;
-        text-align: center;
-        margin-bottom: 2rem;
-    }
-    .chat-message {
-        padding: 1rem;
-        border-radius: 0.5rem;
-        margin-bottom: 1rem;
-        display: flex;
-        flex-direction: column;
-    }
-    .user-message {
-        background-color: #E3F2FD;
-        border-left: 4px solid #2196F3;
-    }
-    .assistant-message {
-        background-color: #F3E5F5;
-        border-left: 4px solid #9C27B0;
-    }
-    .field-box {
-        background-color: #E8F5E9;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        margin: 0.5rem 0;
-        border-left: 4px solid #4CAF50;
-    }
-    .confidence-high {
-        color: #4CAF50;
-        font-weight: bold;
-    }
-    .confidence-medium {
-        color: #FF9800;
-        font-weight: bold;
-    }
-    .confidence-low {
-        color: #F44336;
-        font-weight: bold;
-    }
-    .json-output {
-        background-color: #263238;
-        color: #A6E22E;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        font-family: 'Courier New', monospace;
-        overflow-x: auto;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# Inicializar estado de la sesión
-if 'messages' not in st.session_state:
-    st.session_state.messages = []
-if 'pdf_data' not in st.session_state:
-    st.session_state.pdf_data = None
-if 'extracted_data' not in st.session_state:
-    st.session_state.extracted_data = None
-if 'pdf_text' not in st.session_state:
-    st.session_state.pdf_text = None
-
-# Sidebar
-with st.sidebar:
-    st.image("https://via.placeholder.com/200x80/FF6B6B/FFFFFF?text=Invoice+AI", use_column_width=True)
-    st.markdown("### ⚙️ Configuración")
-    
-    # Modo de operación
-    operation_mode = st.radio(
-        "Modo de operación:",
-        ["🎭 Demo (Sin API)", "🚀 Producción (Con API)"],
-        help="Demo usa Claude directamente en el navegador. Producción usa tu endpoint de AWS."
-    )
-    
-    if operation_mode == "🚀 Producción (Con API)":
-        api_endpoint = st.text_input(
-            "API Endpoint:",
-            placeholder="https://xxxxx.execute-api.us-east-1.amazonaws.com/prod/process-invoice"
-        )
-    
-    st.markdown("---")
-    st.markdown("### 📊 Estadísticas")
-    st.metric("Facturas procesadas", len(st.session_state.messages) // 2)
-    
-    st.markdown("---")
-    st.markdown("### ℹ️ Información")
-    st.info("""
-    **Cómo usar:**
-    1. Sube tu factura PDF
-    2. Espera el análisis automático
-    3. Conversa con Claude sobre los campos
-    4. Exporta el JSON final
-    """)
-    
-    if st.button("🗑️ Limpiar conversación", use_container_width=True):
-        st.session_state.messages = []
-        st.session_state.extracted_data = None
-        st.session_state.pdf_data = None
-        st.session_state.pdf_text = None
-        st.rerun()
-
-# Header principal
-st.markdown('<div class="main-header">📄 Invoice Extractor - Demo Interactivo</div>', unsafe_allow_html=True)
-
-# Tabs principales
-tab1, tab2, tab3 = st.tabs(["💬 Chat Inteligente", "📋 Datos Extraídos", "📄 Vista del PDF"])
-
-with tab1:
-    # Área de carga de PDF
-    uploaded_file = st.file_uploader(
-        "Sube tu factura PDF",
-        type=['pdf'],
-        help="Formatos soportados: PDF (digital o escaneado)"
-    )
-    
-    if uploaded_file is not None and st.session_state.pdf_data is None:
-        # Procesar el PDF
-        with st.spinner("🔍 Analizando factura..."):
-            # Leer PDF
-            pdf_bytes = uploaded_file.read()
-            st.session_state.pdf_data = pdf_bytes
-            
-            # Extraer texto del PDF
-            try:
-                pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_bytes))
-                pdf_text = ""
-                for page in pdf_reader.pages:
-                    pdf_text += page.extract_text()
-                st.session_state.pdf_text = pdf_text
-            except:
-                st.session_state.pdf_text = "No se pudo extraer texto del PDF"
-            
-            # Simular análisis con Claude (en demo)
-            if operation_mode == "🎭 Demo (Sin API)":
-                # Aquí usaríamos Claude API directamente
-                analysis_result = analyze_invoice_with_claude(pdf_text)
-                st.session_state.extracted_data = analysis_result
-                
-                # Agregar mensaje inicial de Claude
-                initial_message = generate_initial_analysis_message(analysis_result)
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": initial_message,
-                    "data": analysis_result
-                })
-            else:
-                # Modo producción: llamar a tu API
-                if api_endpoint:
-                    try:
-                        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
-                        response = requests.post(
-                            api_endpoint,
-                            json={"pdf_base64": pdf_base64},
-                            timeout=300
-                        )
-                        result = response.json()
-                        st.session_state.extracted_data = result
-                        
-                        initial_message = generate_initial_analysis_message(result)
-                        st.session_state.messages.append({
-                            "role": "assistant",
-                            "content": initial_message,
-                            "data": result
-                        })
-                    except Exception as e:
-                        st.error(f"Error al procesar con API: {str(e)}")
-        
-        st.rerun()
-    
-    # Mostrar chat
-    st.markdown("### 💬 Conversación con el Asistente")
-    
-    # Contenedor de mensajes
-    chat_container = st.container()
-    
-    with chat_container:
-        for message in st.session_state.messages:
-            if message["role"] == "user":
-                st.markdown(f"""
-                <div class="chat-message user-message">
-                    <b>👤 Tú:</b><br>
-                    {message["content"]}
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-                <div class="chat-message assistant-message">
-                    <b>🤖 Claude:</b><br>
-                    {message["content"]}
-                </div>
-                """, unsafe_allow_html=True)
-    
-    # Input de chat
-    if st.session_state.extracted_data:
-        user_input = st.chat_input("Pregúntame sobre los campos detectados...")
-        
-        if user_input:
-            # Agregar mensaje del usuario
-            st.session_state.messages.append({
-                "role": "user",
-                "content": user_input
-            })
-            
-            # Generar respuesta de Claude
-            with st.spinner("🤔 Claude está pensando..."):
-                response = generate_chat_response(
-                    user_input, 
-                    st.session_state.extracted_data,
-                    st.session_state.pdf_text
-                )
-                
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": response
-                })
-            
-            st.rerun()
-        
-        # Sugerencias de preguntas
-        st.markdown("#### 💡 Preguntas sugeridas:")
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            if st.button("¿Qué tan seguro estás del CUIT?", use_container_width=True):
-                st.session_state.messages.append({
-                    "role": "user",
-                    "content": "¿Qué tan seguro estás del CUIT del proveedor?"
-                })
-                st.rerun()
-        
-        with col2:
-            if st.button("Explícame los montos", use_container_width=True):
-                st.session_state.messages.append({
-                    "role": "user",
-                    "content": "Explícame cómo calculaste los montos"
-                })
-                st.rerun()
-        
-        with col3:
-            if st.button("¿Hay algún campo dudoso?", use_container_width=True):
-                st.session_state.messages.append({
-                    "role": "user",
-                    "content": "¿Hay algún campo del que no estés seguro?"
-                })
-                st.rerun()
-
-with tab2:
-    st.markdown("### 📋 Datos Extraídos de la Factura")
-    
-    if st.session_state.extracted_data:
-        data = st.session_state.extracted_data
-        
-        # Mostrar campos en categorías
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("#### 🏢 Información del Proveedor")
-            display_field_with_confidence(
-                "CUIT", 
-                data.get('supplier', {}).get('cuit', 'No detectado'),
-                data.get('confidence', {}).get('supplier_cuit', 0.95)
-            )
-            display_field_with_confidence(
-                "Razón Social",
-                data.get('supplier', {}).get('name', 'No detectado'),
-                data.get('confidence', {}).get('supplier_name', 0.90)
-            )
-            display_field_with_confidence(
-                "Dirección",
-                data.get('supplier', {}).get('address', 'No detectado'),
-                data.get('confidence', {}).get('supplier_address', 0.85)
-            )
-            
-            st.markdown("#### 📄 Información de la Factura")
-            display_field_with_confidence(
-                "Tipo",
-                data.get('invoiceType', 'No detectado'),
-                data.get('confidence', {}).get('invoice_type', 0.98)
-            )
-            display_field_with_confidence(
-                "Número",
-                data.get('invoiceNumber', 'No detectado'),
-                data.get('confidence', {}).get('invoice_number', 0.95)
-            )
-            display_field_with_confidence(
-                "Punto de Venta",
-                data.get('pointSale', 'No detectado'),
-                data.get('confidence', {}).get('point_sale', 0.90)
-            )
-            display_field_with_confidence(
-                "CAE",
-                data.get('cae', 'No detectado'),
-                data.get('confidence', {}).get('cae', 0.92)
-            )
-        
-        with col2:
-            st.markdown("#### 📅 Fechas")
-            display_field_with_confidence(
-                "Fecha de Emisión",
-                data.get('documentDate', 'No detectado'),
-                data.get('confidence', {}).get('document_date', 0.95)
-            )
-            display_field_with_confidence(
-                "Fecha de Vencimiento",
-                data.get('dueDate', 'No detectado'),
-                data.get('confidence', {}).get('due_date', 0.90)
-            )
-            
-            st.markdown("#### 💰 Montos")
-            display_field_with_confidence(
-                "Total",
-                f"${data.get('amount', 0):,.2f}",
-                data.get('confidence', {}).get('amount', 0.98)
-            )
-            display_field_with_confidence(
-                "IVA",
-                f"${data.get('iva', 0):,.2f}",
-                data.get('confidence', {}).get('iva', 0.95)
-            )
-            display_field_with_confidence(
-                "Subtotal Gravado",
-                f"${data.get('amountGrav', 0):,.2f}",
-                data.get('confidence', {}).get('amount_grav', 0.90)
-            )
-            display_field_with_confidence(
-                "No Gravado",
-                f"${data.get('amountNoGrav', 0):,.2f}",
-                data.get('confidence', {}).get('amount_no_grav', 0.85)
-            )
-        
-        # Items/Líneas
-        if data.get('items'):
-            st.markdown("#### 📦 Items de la Factura")
-            items_df = []
-            for i, item in enumerate(data['items'], 1):
-                items_df.append({
-                    "#": i,
-                    "Descripción": item.get('description', ''),
-                    "Cantidad": item.get('quantity', 0),
-                    "Precio Unit.": f"${item.get('unit_price', 0):,.2f}",
-                    "Total": f"${item.get('total', 0):,.2f}"
-                })
-            
-            st.dataframe(items_df, use_container_width=True)
-        
-        # JSON completo
-        st.markdown("#### 📤 JSON para tu Sistema")
-        
-        # Preparar JSON final
-        final_json = prepare_final_json(data)
-        
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.markdown('<div class="json-output">', unsafe_allow_html=True)
-            st.code(json.dumps(final_json, indent=2, ensure_ascii=False), language='json')
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        with col2:
-            st.download_button(
-                label="⬇️ Descargar JSON",
-                data=json.dumps(final_json, indent=2, ensure_ascii=False),
-                file_name=f"factura_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                mime="application/json",
-                use_container_width=True
-            )
-            
-            if st.button("📋 Copiar al portapapeles", use_container_width=True):
-                st.write("JSON copiado!")
-                # En un entorno real, usarías JavaScript para copiar al portapapeles
-    else:
-        st.info("👆 Sube una factura para ver los datos extraídos")
-
-with tab3:
-    st.markdown("### 📄 Vista del PDF")
-    
-    if st.session_state.pdf_text:
-        st.markdown("#### Texto extraído del PDF:")
-        st.text_area(
-            "Contenido del PDF",
-            st.session_state.pdf_text,
-            height=400,
-            disabled=True
-        )
-    else:
-        st.info("👆 Sube una factura para ver su contenido")
-
-
-# Funciones auxiliares
 
 def analyze_invoice_with_claude(pdf_text):
     """
@@ -783,6 +384,413 @@ def parse_amount(amount_str):
         return float(cleaned)
     except:
         return 0.0
+
+
+# Configuración de la página
+st.set_page_config(
+    page_title="Invoice Extractor Demo",
+    page_icon="📄",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# CSS personalizado
+st.markdown("""
+<style>
+    .main-header {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #FF6B6B;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    .chat-message {
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+        display: flex;
+        flex-direction: column;
+    }
+    .user-message {
+        background-color: #E3F2FD;
+        border-left: 4px solid #2196F3;
+    }
+    .assistant-message {
+        background-color: #F3E5F5;
+        border-left: 4px solid #9C27B0;
+    }
+    .field-box {
+        background-color: #E8F5E9;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin: 0.5rem 0;
+        border-left: 4px solid #4CAF50;
+    }
+    .confidence-high {
+        color: #4CAF50;
+        font-weight: bold;
+    }
+    .confidence-medium {
+        color: #FF9800;
+        font-weight: bold;
+    }
+    .confidence-low {
+        color: #F44336;
+        font-weight: bold;
+    }
+    .json-output {
+        background-color: #263238;
+        color: #A6E22E;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        font-family: 'Courier New', monospace;
+        overflow-x: auto;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Inicializar estado de la sesión
+if 'messages' not in st.session_state:
+    st.session_state.messages = []
+if 'pdf_data' not in st.session_state:
+    st.session_state.pdf_data = None
+if 'extracted_data' not in st.session_state:
+    st.session_state.extracted_data = None
+if 'pdf_text' not in st.session_state:
+    st.session_state.pdf_text = None
+
+# Sidebar
+with st.sidebar:
+    st.image("https://via.placeholder.com/200x80/FF6B6B/FFFFFF?text=Invoice+AI", use_column_width=True)
+    st.markdown("### ⚙️ Configuración")
+    
+    # Modo de operación
+    operation_mode = st.radio(
+        "Modo de operación:",
+        ["🎭 Demo (Sin API)", "🚀 Producción (Con API)"],
+        help="Demo usa Claude directamente en el navegador. Producción usa tu endpoint de AWS."
+    )
+    
+    if operation_mode == "🚀 Producción (Con API)":
+        api_endpoint = st.text_input(
+            "API Endpoint:",
+            placeholder="https://xxxxx.execute-api.us-east-1.amazonaws.com/prod/process-invoice"
+        )
+    
+    st.markdown("---")
+    st.markdown("### 📊 Estadísticas")
+    st.metric("Facturas procesadas", len(st.session_state.messages) // 2)
+    
+    st.markdown("---")
+    st.markdown("### ℹ️ Información")
+    st.info("""
+    **Cómo usar:**
+    1. Sube tu factura PDF
+    2. Espera el análisis automático
+    3. Conversa con Claude sobre los campos
+    4. Exporta el JSON final
+    """)
+    
+    if st.button("🗑️ Limpiar conversación", use_container_width=True):
+        st.session_state.messages = []
+        st.session_state.extracted_data = None
+        st.session_state.pdf_data = None
+        st.session_state.pdf_text = None
+        st.rerun()
+
+# Header principal
+st.markdown('<div class="main-header">📄 Invoice Extractor - Demo Interactivo</div>', unsafe_allow_html=True)
+
+# Tabs principales
+tab1, tab2, tab3 = st.tabs(["💬 Chat Inteligente", "📋 Datos Extraídos", "📄 Vista del PDF"])
+
+with tab1:
+    # Área de carga de PDF
+    uploaded_file = st.file_uploader(
+        "Sube tu factura PDF",
+        type=['pdf'],
+        help="Formatos soportados: PDF (digital o escaneado)"
+    )
+    
+    if uploaded_file is not None and st.session_state.pdf_data is None:
+        # Procesar el PDF
+        with st.spinner("🔍 Analizando factura..."):
+            # Leer PDF
+            pdf_bytes = uploaded_file.read()
+            st.session_state.pdf_data = pdf_bytes
+            
+            # Extraer texto del PDF
+            try:
+                pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_bytes))
+                pdf_text = ""
+                for page in pdf_reader.pages:
+                    pdf_text += page.extract_text()
+                st.session_state.pdf_text = pdf_text
+            except:
+                st.session_state.pdf_text = "No se pudo extraer texto del PDF"
+            
+            # Simular análisis con Claude (en demo)
+            if operation_mode == "🎭 Demo (Sin API)":
+                # Aquí usaríamos Claude API directamente
+                # analysis_result = analyze_invoice_with_claude(pdf_text)
+                # Intentar usar Claude API si hay key
+                try:
+                    from claude_api import analyze_invoice_with_claude_api
+                    analysis_result = analyze_invoice_with_claude_api(pdf_text)
+                except:
+                    # Fallback a simulación
+                    analysis_result = analyze_invoice_with_claude(pdf_text)
+                st.session_state.extracted_data = analysis_result
+                # Agregar mensaje inicial de Claude
+                initial_message = generate_initial_analysis_message(analysis_result)
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": initial_message,
+                    "data": analysis_result
+                })
+            else:
+                # Modo producción: llamar a tu API
+                if api_endpoint:
+                    try:
+                        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+                        response = requests.post(
+                            api_endpoint,
+                            json={"pdf_base64": pdf_base64},
+                            timeout=300
+                        )
+                        result = response.json()
+                        st.session_state.extracted_data = result
+                        
+                        initial_message = generate_initial_analysis_message(result)
+                        st.session_state.messages.append({
+                            "role": "assistant",
+                            "content": initial_message,
+                            "data": result
+                        })
+                    except Exception as e:
+                        st.error(f"Error al procesar con API: {str(e)}")
+        
+        st.rerun()
+    
+    # Mostrar chat
+    st.markdown("### 💬 Conversación con el Asistente")
+    
+    # Contenedor de mensajes
+    chat_container = st.container()
+    
+    with chat_container:
+        for message in st.session_state.messages:
+            if message["role"] == "user":
+                st.markdown(f"""
+                <div class="chat-message user-message">
+                    <b>👤 Tú:</b><br>
+                    {message["content"]}
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div class="chat-message assistant-message">
+                    <b>🤖 Claude:</b><br>
+                    {message["content"]}
+                </div>
+                """, unsafe_allow_html=True)
+    
+    # Input de chat
+    if st.session_state.extracted_data:
+        user_input = st.chat_input("Pregúntame sobre los campos detectados...")
+        
+        if user_input:
+            # Agregar mensaje del usuario
+            st.session_state.messages.append({
+                "role": "user",
+                "content": user_input
+            })
+            
+            # Generar respuesta de Claude
+            with st.spinner("🤔 Claude está pensando..."):
+                response = generate_chat_response(
+                    user_input, 
+                    st.session_state.extracted_data,
+                    st.session_state.pdf_text
+                )
+                
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": response
+                })
+            
+            st.rerun()
+        
+        # Sugerencias de preguntas
+        st.markdown("#### 💡 Preguntas sugeridas:")
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("¿Qué tan seguro estás del CUIT?", use_container_width=True):
+                st.session_state.messages.append({
+                    "role": "user",
+                    "content": "¿Qué tan seguro estás del CUIT del proveedor?"
+                })
+                st.rerun()
+        
+        with col2:
+            if st.button("Explícame los montos", use_container_width=True):
+                st.session_state.messages.append({
+                    "role": "user",
+                    "content": "Explícame cómo calculaste los montos"
+                })
+                st.rerun()
+        
+        with col3:
+            if st.button("¿Hay algún campo dudoso?", use_container_width=True):
+                st.session_state.messages.append({
+                    "role": "user",
+                    "content": "¿Hay algún campo del que no estés seguro?"
+                })
+                st.rerun()
+
+with tab2:
+    st.markdown("### 📋 Datos Extraídos de la Factura")
+    
+    if st.session_state.extracted_data:
+        data = st.session_state.extracted_data
+        
+        # Mostrar campos en categorías
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### 🏢 Información del Proveedor")
+            display_field_with_confidence(
+                "CUIT", 
+                data.get('supplier', {}).get('cuit', 'No detectado'),
+                data.get('confidence', {}).get('supplier_cuit', 0.95)
+            )
+            display_field_with_confidence(
+                "Razón Social",
+                data.get('supplier', {}).get('name', 'No detectado'),
+                data.get('confidence', {}).get('supplier_name', 0.90)
+            )
+            display_field_with_confidence(
+                "Dirección",
+                data.get('supplier', {}).get('address', 'No detectado'),
+                data.get('confidence', {}).get('supplier_address', 0.85)
+            )
+            
+            st.markdown("#### 📄 Información de la Factura")
+            display_field_with_confidence(
+                "Tipo",
+                data.get('invoiceType', 'No detectado'),
+                data.get('confidence', {}).get('invoice_type', 0.98)
+            )
+            display_field_with_confidence(
+                "Número",
+                data.get('invoiceNumber', 'No detectado'),
+                data.get('confidence', {}).get('invoice_number', 0.95)
+            )
+            display_field_with_confidence(
+                "Punto de Venta",
+                data.get('pointSale', 'No detectado'),
+                data.get('confidence', {}).get('point_sale', 0.90)
+            )
+            display_field_with_confidence(
+                "CAE",
+                data.get('cae', 'No detectado'),
+                data.get('confidence', {}).get('cae', 0.92)
+            )
+        
+        with col2:
+            st.markdown("#### 📅 Fechas")
+            display_field_with_confidence(
+                "Fecha de Emisión",
+                data.get('documentDate', 'No detectado'),
+                data.get('confidence', {}).get('document_date', 0.95)
+            )
+            display_field_with_confidence(
+                "Fecha de Vencimiento",
+                data.get('dueDate', 'No detectado'),
+                data.get('confidence', {}).get('due_date', 0.90)
+            )
+            
+            st.markdown("#### 💰 Montos")
+            display_field_with_confidence(
+                "Total",
+                f"${data.get('amount', 0):,.2f}",
+                data.get('confidence', {}).get('amount', 0.98)
+            )
+            display_field_with_confidence(
+                "IVA",
+                f"${data.get('iva', 0):,.2f}",
+                data.get('confidence', {}).get('iva', 0.95)
+            )
+            display_field_with_confidence(
+                "Subtotal Gravado",
+                f"${data.get('amountGrav', 0):,.2f}",
+                data.get('confidence', {}).get('amount_grav', 0.90)
+            )
+            display_field_with_confidence(
+                "No Gravado",
+                f"${data.get('amountNoGrav', 0):,.2f}",
+                data.get('confidence', {}).get('amount_no_grav', 0.85)
+            )
+        
+        # Items/Líneas
+        if data.get('items'):
+            st.markdown("#### 📦 Items de la Factura")
+            items_df = []
+            for i, item in enumerate(data['items'], 1):
+                items_df.append({
+                    "#": i,
+                    "Descripción": item.get('description', ''),
+                    "Cantidad": item.get('quantity', 0),
+                    "Precio Unit.": f"${item.get('unit_price', 0):,.2f}",
+                    "Total": f"${item.get('total', 0):,.2f}"
+                })
+            
+            st.dataframe(items_df, use_container_width=True)
+        
+        # JSON completo
+        st.markdown("#### 📤 JSON para tu Sistema")
+        
+        # Preparar JSON final
+        final_json = prepare_final_json(data)
+        
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.markdown('<div class="json-output">', unsafe_allow_html=True)
+            st.code(json.dumps(final_json, indent=2, ensure_ascii=False), language='json')
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col2:
+            st.download_button(
+                label="⬇️ Descargar JSON",
+                data=json.dumps(final_json, indent=2, ensure_ascii=False),
+                file_name=f"factura_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                mime="application/json",
+                use_container_width=True
+            )
+            
+            if st.button("📋 Copiar al portapapeles", use_container_width=True):
+                st.write("JSON copiado!")
+                # En un entorno real, usarías JavaScript para copiar al portapapeles
+    else:
+        st.info("👆 Sube una factura para ver los datos extraídos")
+
+with tab3:
+    st.markdown("### 📄 Vista del PDF")
+    
+    if st.session_state.pdf_text:
+        st.markdown("#### Texto extraído del PDF:")
+        st.text_area(
+            "Contenido del PDF",
+            st.session_state.pdf_text,
+            height=400,
+            disabled=True
+        )
+    else:
+        st.info("👆 Sube una factura para ver su contenido")
+
+
+# Funciones auxiliares
 
 
 # Footer
