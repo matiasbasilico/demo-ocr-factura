@@ -414,10 +414,12 @@ st.markdown("""
     .user-message {
         background-color: #E3F2FD;
         border-left: 4px solid #2196F3;
+        color: #1565C0;  /* NUEVO: texto azul oscuro */
     }
     .assistant-message {
         background-color: #F3E5F5;
         border-left: 4px solid #9C27B0;
+        color: #4A148C;  /* NUEVO: texto púrpura oscuro */
     }
     .field-box {
         background-color: #E8F5E9;
@@ -425,17 +427,21 @@ st.markdown("""
         border-radius: 0.5rem;
         margin: 0.5rem 0;
         border-left: 4px solid #4CAF50;
+        color: #1B5E20;  /* NUEVO: texto verde oscuro */
+    }
+    .field-box strong {
+        color: #2E7D32;  /* NUEVO: labels más oscuros */
     }
     .confidence-high {
-        color: #4CAF50;
+        color: #2E7D32;  /* Verde más oscuro */
         font-weight: bold;
     }
     .confidence-medium {
-        color: #FF9800;
+        color: #E65100;  /* Naranja más oscuro */
         font-weight: bold;
     }
     .confidence-low {
-        color: #F44336;
+        color: #C62828;  /* Rojo más oscuro */
         font-weight: bold;
     }
     .json-output {
