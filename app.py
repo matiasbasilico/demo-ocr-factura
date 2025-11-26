@@ -27,6 +27,7 @@ def analyze_invoice_with_claude(pdf_text):
         
         # Fallback: código regex básico
         import re
+
         result = {
             'supplier': {},
             'client': {},
@@ -46,79 +47,79 @@ def analyze_invoice_with_claude(pdf_text):
             'reasoning': {}
         }
         
-    # CUIT del proveedor
-    cuit_match = re.search(r'CUIT[:\s]+(\d{2}-\d{8}-\d{1})', pdf_text)
-    if cuit_match:
-        result['supplier']['cuit'] = cuit_match.group(1)
-        result['confidence']['supplier_cuit'] = 0.98
-        result['reasoning']['supplier_cuit'] = f"Encontré el CUIT '{cuit_match.group(1)}' claramente marcado en el encabezado del documento."
-    
-    # Razón social
-    name_match = re.search(r'([A-Z\s\.]+S\.A\.|[A-Z\s\.]+S\.R\.L\.)', pdf_text)
-    if name_match:
-        result['supplier']['name'] = name_match.group(1).strip()
-        result['confidence']['supplier_name'] = 0.95
-        result['reasoning']['supplier_name'] = f"Identifiqué la razón social '{result['supplier']['name']}' como el nombre legal de la empresa."
-    
-    # Número de factura
-    invoice_match = re.search(r'Factura\s+N[°ro\.]+\s*[:\s]*(\d+-\d+)', pdf_text, re.IGNORECASE)
-    if invoice_match:
-        result['invoiceNumber'] = invoice_match.group(1)
-        parts = invoice_match.group(1).split('-')
-        if len(parts) == 2:
-            result['pointSale'] = parts[0]
-        result['confidence']['invoice_number'] = 0.98
-        result['reasoning']['invoice_number'] = f"El número de factura '{result['invoiceNumber']}' está en formato estándar argentino."
-    
-    # Tipo de factura
-    type_match = re.search(r'CODIGO\s+(\d{2})', pdf_text)
-    if type_match:
-        code = type_match.group(1)
-        code_map = {'01': 'A', '06': 'B', '11': 'C'}
-        result['invoiceType'] = code_map.get(code, code)
-        result['confidence']['invoice_type'] = 0.99
-        result['reasoning']['invoice_type'] = f"El código AFIP {code} corresponde a una Factura tipo {result['invoiceType']}."
-    
-    # CAE
-    cae_match = re.search(r'C\.?A\.?E\.?\s*N[°º]?\s*[:\s]*(\d+)', pdf_text, re.IGNORECASE)
-    if cae_match:
-        result['cae'] = cae_match.group(1)
-        result['confidence']['cae'] = 0.97
-        result['reasoning']['cae'] = f"CAE {result['cae']} es el código de autorización electrónica de AFIP."
-    
-    # Fechas
-    date_match = re.search(r'Fecha\s+de\s+Emisi[oó]n[:\s]+(\d{2}/\d{2}/\d{4})', pdf_text, re.IGNORECASE)
-    if date_match:
-        date_str = date_match.group(1)
-        result['documentDate'] = convert_date_format(date_str)
-        result['confidence']['document_date'] = 0.98
-        result['reasoning']['document_date'] = f"Fecha de emisión {date_str} extraída del encabezado."
-    
-    due_match = re.search(r'Vencimiento[:\s]+(\d{2}/\d{2}/\d{4})', pdf_text, re.IGNORECASE)
-    if due_match:
-        date_str = due_match.group(1)
-        result['dueDate'] = convert_date_format(date_str)
-        result['confidence']['due_date'] = 0.95
-        result['reasoning']['due_date'] = f"Fecha de vencimiento {date_str} para el pago."
-    
-    # Montos
-    total_match = re.search(r'Total\s+(?:Factura|a\s+Pagar)[:\s]*\$?\s*([\d,\.]+)', pdf_text, re.IGNORECASE)
-    if total_match:
-        result['amount'] = parse_amount(total_match.group(1))
-        result['confidence']['amount'] = 0.99
-        result['reasoning']['amount'] = f"Total de ${result['amount']:,.2f} extraído del pie de la factura."
-    
-    iva_match = re.search(r'Impuesto\s+Interno[:\s]*\$?\s*([\d,\.]+)', pdf_text, re.IGNORECASE)
-    if iva_match:
-        result['iva'] = parse_amount(iva_match.group(1))
-        result['confidence']['iva'] = 0.95
-        result['reasoning']['iva'] = f"IVA de ${result['iva']:,.2f} identificado en el desglose de impuestos."
-    
-    subtotal_match = re.search(r'Subtotal[:\s]*\$?\s*([\d,\.]+)', pdf_text, re.IGNORECASE)
-    if subtotal_match:
-        result['amountGrav'] = parse_amount(subtotal_match.group(1))
-        result['confidence']['amount_grav'] = 0.92
-        result['reasoning']['amount_grav'] = f"Subtotal gravado de ${result['amountGrav']:,.2f}."
+        # CUIT del proveedor
+        cuit_match = re.search(r'CUIT[:\s]+(\d{2}-\d{8}-\d{1})', pdf_text)
+        if cuit_match:
+            result['supplier']['cuit'] = cuit_match.group(1)
+            result['confidence']['supplier_cuit'] = 0.98
+            result['reasoning']['supplier_cuit'] = f"Encontré el CUIT '{cuit_match.group(1)}' claramente marcado en el encabezado del documento."
+        
+        # Razón social
+        name_match = re.search(r'([A-Z\s\.]+S\.A\.|[A-Z\s\.]+S\.R\.L\.)', pdf_text)
+        if name_match:
+            result['supplier']['name'] = name_match.group(1).strip()
+            result['confidence']['supplier_name'] = 0.95
+            result['reasoning']['supplier_name'] = f"Identifiqué la razón social '{result['supplier']['name']}' como el nombre legal de la empresa."
+        
+        # Número de factura
+        invoice_match = re.search(r'Factura\s+N[°ro\.]+\s*[:\s]*(\d+-\d+)', pdf_text, re.IGNORECASE)
+        if invoice_match:
+            result['invoiceNumber'] = invoice_match.group(1)
+            parts = invoice_match.group(1).split('-')
+            if len(parts) == 2:
+                result['pointSale'] = parts[0]
+            result['confidence']['invoice_number'] = 0.98
+            result['reasoning']['invoice_number'] = f"El número de factura '{result['invoiceNumber']}' está en formato estándar argentino."
+        
+        # Tipo de factura
+        type_match = re.search(r'CODIGO\s+(\d{2})', pdf_text)
+        if type_match:
+            code = type_match.group(1)
+            code_map = {'01': 'A', '06': 'B', '11': 'C'}
+            result['invoiceType'] = code_map.get(code, code)
+            result['confidence']['invoice_type'] = 0.99
+            result['reasoning']['invoice_type'] = f"El código AFIP {code} corresponde a una Factura tipo {result['invoiceType']}."
+        
+        # CAE
+        cae_match = re.search(r'C\.?A\.?E\.?\s*N[°º]?\s*[:\s]*(\d+)', pdf_text, re.IGNORECASE)
+        if cae_match:
+            result['cae'] = cae_match.group(1)
+            result['confidence']['cae'] = 0.97
+            result['reasoning']['cae'] = f"CAE {result['cae']} es el código de autorización electrónica de AFIP."
+        
+        # Fechas
+        date_match = re.search(r'Fecha\s+de\s+Emisi[oó]n[:\s]+(\d{2}/\d{2}/\d{4})', pdf_text, re.IGNORECASE)
+        if date_match:
+            date_str = date_match.group(1)
+            result['documentDate'] = convert_date_format(date_str)
+            result['confidence']['document_date'] = 0.98
+            result['reasoning']['document_date'] = f"Fecha de emisión {date_str} extraída del encabezado."
+        
+        due_match = re.search(r'Vencimiento[:\s]+(\d{2}/\d{2}/\d{4})', pdf_text, re.IGNORECASE)
+        if due_match:
+            date_str = due_match.group(1)
+            result['dueDate'] = convert_date_format(date_str)
+            result['confidence']['due_date'] = 0.95
+            result['reasoning']['due_date'] = f"Fecha de vencimiento {date_str} para el pago."
+        
+        # Montos
+        total_match = re.search(r'Total\s+(?:Factura|a\s+Pagar)[:\s]*\$?\s*([\d,\.]+)', pdf_text, re.IGNORECASE)
+        if total_match:
+            result['amount'] = parse_amount(total_match.group(1))
+            result['confidence']['amount'] = 0.99
+            result['reasoning']['amount'] = f"Total de ${result['amount']:,.2f} extraído del pie de la factura."
+        
+        iva_match = re.search(r'Impuesto\s+Interno[:\s]*\$?\s*([\d,\.]+)', pdf_text, re.IGNORECASE)
+        if iva_match:
+            result['iva'] = parse_amount(iva_match.group(1))
+            result['confidence']['iva'] = 0.95
+            result['reasoning']['iva'] = f"IVA de ${result['iva']:,.2f} identificado en el desglose de impuestos."
+        
+        subtotal_match = re.search(r'Subtotal[:\s]*\$?\s*([\d,\.]+)', pdf_text, re.IGNORECASE)
+        if subtotal_match:
+            result['amountGrav'] = parse_amount(subtotal_match.group(1))
+            result['confidence']['amount_grav'] = 0.92
+            result['reasoning']['amount_grav'] = f"Subtotal gravado de ${result['amountGrav']:,.2f}."
     
     return result
 
@@ -146,17 +147,20 @@ He identificado los siguientes campos con alta confianza:
     # Agregar campos con alta confianza
     high_confidence_fields = []
     for field, confidence in data.get('confidence', {}).items():
+        conf_normalized = confidence if confidence <= 1 else confidence / 100
         if confidence >= 0.95:
-            high_confidence_fields.append(f"✅ {field.replace('_', ' ').title()}: {confidence:.0%}")
+            high_confidence_fields.append(f"✅ {field.replace('_', ' ').title()}: {conf_normalized:.0%}")
     
     if high_confidence_fields:
         message += "\n" + "\n".join(high_confidence_fields[:5])
     
+    confidences = [c if c <= 1 else c/100 for c in data.get('confidence', {}).values()]
+    avg_conf = sum(confidences) / len(confidences) * 100 if confidences else 0
     message += f"""
 
 📊 **Resumen de la extracción:**
 - Total de campos detectados: {len([k for k, v in data.items() if v and k != 'confidence' and k != 'reasoning'])}
-- Confianza promedio: {sum(data.get('confidence', {}).values()) / len(data.get('confidence', {})) * 100:.1f}%
+- Confianza promedio: {avg_conf:.1f}%
 
 💡 **¿Qué puedo hacer por ti?**
 - Pregúntame sobre cualquier campo específico
@@ -178,7 +182,9 @@ def generate_chat_response(user_input, extracted_data, pdf_text):
     # Respuestas inteligentes basadas en el contexto
     if 'cuit' in user_input_lower:
         cuit = extracted_data.get('supplier', {}).get('cuit', 'No detectado')
-        confidence = extracted_data.get('confidence', {}).get('supplier_cuit', 0)
+        confidence = extracted_data.get('confidence', {}).get('supplier_cuit', 0) 
+        if confidence > 1:
+            confidence = confidence / 100
         reasoning = extracted_data.get('reasoning', {}).get('supplier_cuit', '')
         
         return f"""Sobre el CUIT del proveedor:
@@ -473,7 +479,7 @@ if 'pdf_text' not in st.session_state:
 
 # Sidebar
 with st.sidebar:
-    st.image("https://via.placeholder.com/200x80/FF6B6B/FFFFFF?text=Invoice+AI", use_column_width=True)
+    st.markdown("### 📄 Invoice Extractor AI")
     st.markdown("### ⚙️ Configuración")
     
     # Modo de operación
