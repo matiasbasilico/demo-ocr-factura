@@ -251,11 +251,13 @@ El CUIT tiene el formato correcto (XX-XXXXXXXX-X) y está claramente identificad
             'BRL': '💵',
             'CLP': '💵'
         }.get(currency, '💰')
-        
+        import html
+        currency_reasoning_safe = html.escape(currency_reasoning) if currency_reasoning else " "
+
         return f"""Te explico cómo identifiqué los montos:
 
 {currency_emoji} **Moneda detectada:** {currency} ({currency_symbol})
-{currency_reasoning}
+{currency_reasoning_safe}
 
 💰 **Total Final:** {currency_symbol}{amount:,.2f} {currency}
 - Encontré este valor en la sección "Total a Pagar" del documento
