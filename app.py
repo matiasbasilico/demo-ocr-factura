@@ -175,41 +175,46 @@ He identificado los siguientes campos con alta confianza:
 def generate_chat_response(user_input, extracted_data, pdf_text):
     """
     Genera una respuesta conversacional basada en la pregunta del usuario.
-    En producción, esto usaría Claude API con el contexto completo.
     """
     user_input_lower = user_input.lower()
     
     # Respuestas inteligentes basadas en el contexto
     if 'cuit' in user_input_lower:
         cuit = extracted_data.get('supplier', {}).get('cuit', 'No detectado')
-        confidence = extracted_data.get('confidence', {}).get('supplier_cuit', 0) 
+        confidence = extracted_data.get('confidence', {}).get('supplier_cuit', 0)
+        reasoning = extracted_data.get('reasoning', {}).get('supplier_cuit', '')
+        
+        # Normalizar confianza
         if confidence > 1:
             confidence = confidence / 100
-        reasoning = extracted_data.get('reasoning', {}).get('supplier_cuit', '')
         
         return f"""Sobre el CUIT del proveedor:
 
 📊 **Valor detectado:** {cuit}
-🎯 **Confianza:** {confidence:.1%}
+🎯 **Confianza:** {confidence:.0%}
 
 💭 **Mi razonamiento:**
 {reasoning}
 
 El CUIT tiene el formato correcto (XX-XXXXXXXX-X) y está claramente identificado en el documento. {"Estoy muy seguro de este valor." if confidence > 0.95 else "Hay una pequeña posibilidad de error en la lectura."}
 
-¿Te gustaría que revise algún otro campo?
-"""
+¿Te gustaría que revise algún otro campo?"""
     
     elif 'monto' in user_input_lower or 'total' in user_input_lower or 'calculaste' in user_input_lower:
         amount = extracted_data.get('amount', 0)
         iva = extracted_data.get('iva', 0)
         subtotal = extracted_data.get('amountGrav', 0)
+        confidence = extracted_data.get('confidence', {}).get('amount', 0.99)
+        
+        # Normalizar confianza
+        if confidence > 1:
+            confidence = confidence / 100
         
         return f"""Te explico cómo identifiqué los montos:
 
 💰 **Total Final:** ${amount:,.2f}
 - Encontré este valor en la sección "Total a Pagar" del documento
-- Confianza: {extracted_data.get('confidence', {}).get('amount', 0.99):.0%}
+- Confianza: {confidence:.0%}
 
 📊 **Desglose:**
 - Subtotal Gravado: ${subtotal:,.2f}
@@ -222,20 +227,22 @@ Los montos están claramente marcados en la factura y el formato numérico es co
 2. El formato de moneda es consistente
 3. Las matemáticas cuadran (subtotal + IVA = total)
 
-¿Necesitas que revise algún otro aspecto de los montos?
-"""
+¿Necesitas que revise algún otro aspecto de los montos?"""
     
     elif 'dudoso' in user_input_lower or 'seguro' in user_input_lower or 'confianza' in user_input_lower:
         low_confidence_fields = []
         for field, confidence in extracted_data.get('confidence', {}).items():
-            if confidence < 0.90:
+            # Normalizar
+            conf_normalized = confidence if confidence <= 1 else confidence / 100
+            if conf_normalized < 0.90:
                 field_name = field.replace('_', ' ').title()
-                low_confidence_fields.append(f"⚠️ {field_name}: {confidence:.0%}")
+                low_confidence_fields.append(f"⚠️ {field_name}: {conf_normalized:.0%}")
         
         if low_confidence_fields:
+            fields_text = "\n".join(low_confidence_fields)
             return f"""Estos son los campos donde tengo menor confianza:
 
-{chr(10).join(low_confidence_fields)}
+{fields_text}
 
 💡 **¿Por qué menor confianza?**
 Generalmente, la confianza baja cuando:
@@ -245,9 +252,11 @@ Generalmente, la confianza baja cuando:
 
 **Recomendación:** Te sugiero revisar manualmente estos campos antes de enviar el JSON al sistema.
 
-¿Quieres que te explique alguno de estos campos en detalle?
-"""
+¿Quieres que te explique alguno de estos campos en detalle?"""
         else:
+            confidences = [c if c <= 1 else c/100 for c in extracted_data.get('confidence', {}).values()]
+            avg_conf = sum(confidences) / len(confidences) * 100 if confidences else 0
+            
             return f"""¡Excelente! 🎉
 
 No encontré ningún campo con confianza baja. Todos los valores detectados tienen una confianza superior al 90%, lo que significa que:
@@ -256,37 +265,51 @@ No encontré ningún campo con confianza baja. Todos los valores detectados tien
 ✅ Los datos están en posiciones estándares
 ✅ No hay ambigüedades en la información
 
-**Confianza promedio:** {sum(extracted_data.get('confidence', {}).values()) / len(extracted_data.get('confidence', {})) * 100:.1f}%
+**Confianza promedio:** {avg_conf:.1f}%
 
-Puedes proceder con tranquilidad a cargar esta factura en el sistema. ¿Quieres exportar el JSON ahora?
-"""
+Puedes proceder con tranquilidad a cargar esta factura en el sistema. ¿Quieres exportar el JSON ahora?"""
     
     elif 'fecha' in user_input_lower:
         doc_date = extracted_data.get('documentDate', 'No detectado')
         due_date = extracted_data.get('dueDate', 'No detectado')
+        doc_conf = extracted_data.get('confidence', {}).get('document_date', 0.95)
+        due_conf = extracted_data.get('confidence', {}).get('due_date', 0.90)
+        
+        # Normalizar
+        if doc_conf > 1:
+            doc_conf = doc_conf / 100
+        if due_conf > 1:
+            due_conf = due_conf / 100
         
         return f"""Sobre las fechas de la factura:
 
 📅 **Fecha de Emisión:** {doc_date}
 - {extracted_data.get('reasoning', {}).get('document_date', 'Detectada en el encabezado del documento')}
-- Confianza: {extracted_data.get('confidence', {}).get('document_date', 0.95):.0%}
+- Confianza: {doc_conf:.0%}
 
 ⏰ **Fecha de Vencimiento:** {due_date}
 - {extracted_data.get('reasoning', {}).get('due_date', 'Detectada en la sección de pagos')}
-- Confianza: {extracted_data.get('confidence', {}).get('due_date', 0.90):.0%}
+- Confianza: {due_conf:.0%}
 
 Las fechas están en formato ISO (YYYY-MM-DD) para facilitar su procesamiento en el sistema.
 
-¿Hay algo más que quieras saber sobre las fechas?
-"""
+¿Hay algo más que quieras saber sobre las fechas?"""
     
     elif 'items' in user_input_lower or 'líneas' in user_input_lower or 'productos' in user_input_lower:
         items = extracted_data.get('items', [])
         
         if items:
+            items_list = []
+            for i, item in enumerate(items[:5], 1):
+                desc = item.get('description', 'Sin descripción')[:50]
+                total = item.get('total', 0)
+                items_list.append(f"📦 {i}. {desc}... - ${total:,.2f}")
+            
+            items_text = "\n".join(items_list)
+            
             return f"""Identifiqué {len(items)} línea(s) en la factura:
 
-{chr(10).join([f"📦 {i+1}. {item.get('description', 'Sin descripción')[:50]}... - ${item.get('total', 0):,.2f}" for i, item in enumerate(items[:5])])}
+{items_text}
 
 Cada línea incluye:
 - Descripción del servicio/producto
@@ -294,8 +317,7 @@ Cada línea incluye:
 - Precio unitario
 - Total de la línea
 
-Los items fueron extraídos de la tabla de conceptos del documento. ¿Quieres que te dé más detalles sobre alguno en particular?
-"""
+Los items fueron extraídos de la tabla de conceptos del documento. ¿Quieres que te dé más detalles sobre alguno en particular?"""
         else:
             return """No detecté items individuales en esta factura, pero sí los montos totales. 
 
@@ -304,12 +326,11 @@ Esto puede ocurrir cuando:
 - El formato de la tabla no es estándar
 - Los items están en un formato no estructurado
 
-Los montos totales son correctos, solo que no están desglosados línea por línea. ¿Necesitas que revise algo más?
-"""
+Los montos totales son correctos, solo que no están desglosados línea por línea. ¿Necesitas que revise algo más?"""
     
     else:
         # Respuesta genérica
-        return f"""Entiendo tu pregunta. Déjame pensar en cómo puedo ayudarte mejor...
+        return """Entiendo tu pregunta. Déjame pensar en cómo puedo ayudarte mejor...
 
 📊 **Datos disponibles:**
 - Información del proveedor (CUIT, nombre, dirección)
@@ -324,8 +345,7 @@ Puedes preguntarme sobre:
 - Si hay campos que requieren revisión manual
 - Comparar valores entre diferentes secciones
 
-¿Qué te gustaría saber específicamente? Puedo darte detalles sobre cualquiera de estos aspectos. 🤔
-"""
+¿Qué te gustaría saber específicamente? Puedo darte detalles sobre cualquiera de estos aspectos. 🤔"""
 
 
 def display_field_with_confidence(label, value, confidence):
