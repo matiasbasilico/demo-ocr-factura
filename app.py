@@ -722,22 +722,22 @@ with tab2:
             st.markdown("#### 💰 Montos")
             display_field_with_confidence(
                 "Total",
-                f"${data.get('amount', 0):,.2f}",
+                f"${data.get('amount') or 0:,.2f}" if data.get('amount') is not None else "No detectado",
                 data.get('confidence', {}).get('amount', 0.98)
             )
             display_field_with_confidence(
                 "IVA",
-                f"${data.get('iva', 0):,.2f}",
+                f"${data.get('iva') or 0:,.2f}" if data.get('iva') is not None else "No detectado",
                 data.get('confidence', {}).get('iva', 0.95)
             )
             display_field_with_confidence(
                 "Subtotal Gravado",
-                f"${data.get('amountGrav', 0):,.2f}",
+                f"${data.get('amountGrav') or 0:,.2f}" if data.get('amountGrav') is not None else "No detectado",
                 data.get('confidence', {}).get('amount_grav', 0.90)
             )
             display_field_with_confidence(
                 "No Gravado",
-                f"${data.get('amountNoGrav', 0):,.2f}",
+                f"${data.get('amountNoGrav') or 0:,.2f}" if data.get('amountNoGrav') is not None else "No detectado",
                 data.get('confidence', {}).get('amount_no_grav', 0.85)
             )
         
