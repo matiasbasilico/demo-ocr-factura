@@ -1,6 +1,7 @@
 """
 Invoice Extractor - Demo Interactivo con Claude Sonnet 4
 Aplicación de demostración con chat inteligente para extraer datos de facturas
+Con detección automática de moneda (USD/ARS/EUR/etc)
 """
 
 import streamlit as st
@@ -25,12 +26,14 @@ def analyze_invoice_with_claude(pdf_text):
     except Exception as e:
         st.warning(f"⚠️ Claude API no disponible, usando modo regex básico: {str(e)}")
         
-        # Fallback: código regex básico
         import re
-
+        
+        # Fallback: código regex básico
         result = {
             'supplier': {},
             'client': {},
+            'currency': 'ARS',
+            'currencySymbol': '$',
             'invoiceType': None,
             'invoiceNumber': None,
             'pointSale': None,
@@ -55,7 +58,7 @@ def analyze_invoice_with_claude(pdf_text):
             result['reasoning']['supplier_cuit'] = f"Encontré el CUIT '{cuit_match.group(1)}' claramente marcado en el encabezado del documento."
         
         # Razón social
-        name_match = re.search(r'([A-Z\s\.]+S\.A\.|[A-Z\s\.]+S\.R\.L\.)', pdf_text)
+        name_match = re.search(r'(AMX ARGENTINA S\.A\.|[A-Z]{3,}[\sA-Z\.]+S\.A\.|[A-Z]{3,}[\sA-Z\.]+S\.R\.L\.)', pdf_text)
         if name_match:
             result['supplier']['name'] = name_match.group(1).strip()
             result['confidence']['supplier_name'] = 0.95
@@ -120,8 +123,20 @@ def analyze_invoice_with_claude(pdf_text):
             result['amountGrav'] = parse_amount(subtotal_match.group(1))
             result['confidence']['amount_grav'] = 0.92
             result['reasoning']['amount_grav'] = f"Subtotal gravado de ${result['amountGrav']:,.2f}."
-    
-    return result
+        
+        # Detección básica de moneda en fallback
+        if 'USD' in pdf_text or 'US$' in pdf_text or 'dollars' in pdf_text.lower():
+            result['currency'] = 'USD'
+            result['currencySymbol'] = 'US$'
+            result['reasoning']['currency'] = 'Detectado USD por la presencia de "USD" o "US$" en el documento'
+        elif 'CUIT' in pdf_text or 'AFIP' in pdf_text:
+            result['currency'] = 'ARS'
+            result['currencySymbol'] = '$'
+            result['reasoning']['currency'] = 'Detectado ARS por la presencia de CUIT y/o AFIP (factura argentina)'
+        
+        result['confidence']['currency'] = 0.85
+        
+        return result
 
 
 def generate_initial_analysis_message(data):
@@ -131,6 +146,18 @@ def generate_initial_analysis_message(data):
     invoice_number = data.get('invoiceNumber', 'sin número')
     invoice_type = data.get('invoiceType', 'desconocido')
     total = data.get('amount', 0)
+    currency = data.get('currency', 'ARS')
+    currency_symbol = data.get('currencySymbol', '$')
+    
+    # Emoji de moneda
+    currency_emoji = {
+        'USD': '💵',
+        'ARS': '💰',
+        'EUR': '💶',
+        'MXN': '💵',
+        'BRL': '💵',
+        'CLP': '💵'
+    }.get(currency, '💰')
     
     message = f"""¡Hola! 👋 He analizado la factura y esto es lo que encontré:
 
@@ -139,7 +166,7 @@ def generate_initial_analysis_message(data):
 🏢 **Proveedor detectado:** {supplier_name}
 - CUIT: {data.get('supplier', {}).get('cuit', 'No detectado')}
 
-💰 **Monto total:** ${total:,.2f}
+{currency_emoji} **Monto total:** {currency_symbol}{total:,.2f} {currency}
 
 He identificado los siguientes campos con alta confianza:
 """
@@ -147,15 +174,18 @@ He identificado los siguientes campos con alta confianza:
     # Agregar campos con alta confianza
     high_confidence_fields = []
     for field, confidence in data.get('confidence', {}).items():
+        # Normalizar confianza
         conf_normalized = confidence if confidence <= 1 else confidence / 100
-        if confidence >= 0.95:
+        if conf_normalized >= 0.95:
             high_confidence_fields.append(f"✅ {field.replace('_', ' ').title()}: {conf_normalized:.0%}")
     
     if high_confidence_fields:
         message += "\n" + "\n".join(high_confidence_fields[:5])
     
+    # Calcular confianza promedio normalizada
     confidences = [c if c <= 1 else c/100 for c in data.get('confidence', {}).values()]
     avg_conf = sum(confidences) / len(confidences) * 100 if confidences else 0
+    
     message += f"""
 
 📊 **Resumen de la extracción:**
@@ -200,25 +230,40 @@ El CUIT tiene el formato correcto (XX-XXXXXXXX-X) y está claramente identificad
 
 ¿Te gustaría que revise algún otro campo?"""
     
-    elif 'monto' in user_input_lower or 'total' in user_input_lower or 'calculaste' in user_input_lower:
+    elif 'monto' in user_input_lower or 'total' in user_input_lower or 'calculaste' in user_input_lower or 'moneda' in user_input_lower or 'currency' in user_input_lower:
         amount = extracted_data.get('amount', 0)
         iva = extracted_data.get('iva', 0)
         subtotal = extracted_data.get('amountGrav', 0)
         confidence = extracted_data.get('confidence', {}).get('amount', 0.99)
+        currency = extracted_data.get('currency', 'ARS')
+        currency_symbol = extracted_data.get('currencySymbol', '$')
+        currency_reasoning = extracted_data.get('reasoning', {}).get('currency', 'No especificado')
         
         # Normalizar confianza
         if confidence > 1:
             confidence = confidence / 100
         
+        currency_emoji = {
+            'USD': '💵',
+            'ARS': '💰',
+            'EUR': '💶',
+            'MXN': '💵',
+            'BRL': '💵',
+            'CLP': '💵'
+        }.get(currency, '💰')
+        
         return f"""Te explico cómo identifiqué los montos:
 
-💰 **Total Final:** ${amount:,.2f}
+{currency_emoji} **Moneda detectada:** {currency} ({currency_symbol})
+{currency_reasoning}
+
+💰 **Total Final:** {currency_symbol}{amount:,.2f} {currency}
 - Encontré este valor en la sección "Total a Pagar" del documento
 - Confianza: {confidence:.0%}
 
 📊 **Desglose:**
-- Subtotal Gravado: ${subtotal:,.2f}
-- IVA/Impuestos: ${iva:,.2f}
+- Subtotal Gravado: {currency_symbol}{subtotal:,.2f}
+- IVA/Impuestos: {currency_symbol}{iva:,.2f}
 
 ✅ **Verificación:** El total coincide con la suma de subtotal + impuestos
 
@@ -334,7 +379,9 @@ Los montos totales son correctos, solo que no están desglosados línea por lín
 
 📊 **Datos disponibles:**
 - Información del proveedor (CUIT, nombre, dirección)
+- Información del cliente (nombre, dirección)
 - Detalles de la factura (tipo, número, CAE)
+- Moneda detectada automáticamente
 - Fechas (emisión, vencimiento)
 - Montos (total, IVA, subtotales)
 - Items/líneas (si aplica)
@@ -342,6 +389,7 @@ Los montos totales son correctos, solo que no están desglosados línea por lín
 Puedes preguntarme sobre:
 - La confianza de cualquier campo específico
 - Cómo detecté algún valor en particular
+- Por qué elegí esa moneda (USD vs ARS)
 - Si hay campos que requieren revisión manual
 - Comparar valores entre diferentes secciones
 
@@ -374,8 +422,15 @@ def display_field_with_confidence(label, value, confidence):
 
 def prepare_final_json(data):
     """Prepara el JSON final para enviar al sistema"""
+    
+    # Detectar moneda del análisis
+    currency = data.get('currency', 'ARS')
+    
     return {
         "supplier": data.get('supplier', {}),
+        "client": data.get('client', {}),
+        "currency": currency,
+        "currencySymbol": data.get('currencySymbol', '$'),
         "invoiceType": data.get('invoiceType'),
         "invoiceNumber": data.get('invoiceNumber'),
         "pointSale": data.get('pointSale'),
@@ -388,7 +443,6 @@ def prepare_final_json(data):
         "amountExen": data.get('amountExen'),
         "cae": data.get('cae'),
         "taxCode": data.get('taxCode'),
-        "currency": "ARS",
         "exchangeType": "1",
         "active": True,
         "hasPo": False,
@@ -446,12 +500,12 @@ st.markdown("""
     .user-message {
         background-color: #E3F2FD;
         border-left: 4px solid #2196F3;
-        color: #1565C0;  /* NUEVO: texto azul oscuro */
+        color: #1565C0;
     }
     .assistant-message {
         background-color: #F3E5F5;
         border-left: 4px solid #9C27B0;
-        color: #4A148C;  /* NUEVO: texto púrpura oscuro */
+        color: #4A148C;
     }
     .field-box {
         background-color: #E8F5E9;
@@ -459,21 +513,21 @@ st.markdown("""
         border-radius: 0.5rem;
         margin: 0.5rem 0;
         border-left: 4px solid #4CAF50;
-        color: #1B5E20;  /* NUEVO: texto verde oscuro */
+        color: #1B5E20;
     }
     .field-box strong {
-        color: #2E7D32;  /* NUEVO: labels más oscuros */
+        color: #2E7D32;
     }
     .confidence-high {
-        color: #2E7D32;  /* Verde más oscuro */
+        color: #2E7D32;
         font-weight: bold;
     }
     .confidence-medium {
-        color: #E65100;  /* Naranja más oscuro */
+        color: #E65100;
         font-weight: bold;
     }
     .confidence-low {
-        color: #C62828;  /* Rojo más oscuro */
+        color: #C62828;
         font-weight: bold;
     }
     .json-output {
@@ -483,6 +537,25 @@ st.markdown("""
         border-radius: 0.5rem;
         font-family: 'Courier New', monospace;
         overflow-x: auto;
+    }
+    .currency-badge {
+        display: inline-block;
+        padding: 0.3rem 0.8rem;
+        border-radius: 1rem;
+        font-weight: bold;
+        margin: 0.5rem 0;
+    }
+    .currency-usd {
+        background-color: #C8E6C9;
+        color: #2E7D32;
+    }
+    .currency-ars {
+        background-color: #BBDEFB;
+        color: #1565C0;
+    }
+    .currency-eur {
+        background-color: #F8BBD0;
+        color: #C2185B;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -499,7 +572,10 @@ if 'pdf_text' not in st.session_state:
 
 # Sidebar
 with st.sidebar:
-    st.markdown("### 📄 Invoice Extractor AI")
+    # Logo con emoji en vez de imagen
+    st.markdown("<h1 style='text-align: center; font-size: 3em;'>📄</h1>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center;'>Invoice Extractor AI</h3>", unsafe_allow_html=True)
+    
     st.markdown("### ⚙️ Configuración")
     
     # Modo de operación
@@ -519,6 +595,19 @@ with st.sidebar:
     st.markdown("### 📊 Estadísticas")
     st.metric("Facturas procesadas", len(st.session_state.messages) // 2)
     
+    # Mostrar moneda detectada si hay datos
+    if st.session_state.extracted_data:
+        currency = st.session_state.extracted_data.get('currency', 'ARS')
+        currency_emoji = {
+            'USD': '💵',
+            'ARS': '💰',
+            'EUR': '💶',
+            'MXN': '💵',
+            'BRL': '💵',
+            'CLP': '💵'
+        }.get(currency, '💰')
+        st.metric("Moneda detectada", f"{currency_emoji} {currency}")
+    
     st.markdown("---")
     st.markdown("### ℹ️ Información")
     st.info("""
@@ -527,6 +616,9 @@ with st.sidebar:
     2. Espera el análisis automático
     3. Conversa con Claude sobre los campos
     4. Exporta el JSON final
+    
+    **Monedas soportadas:**
+    💵 USD, 💰 ARS, 💶 EUR, y más
     """)
     
     if st.button("🗑️ Limpiar conversación", use_container_width=True):
@@ -569,16 +661,9 @@ with tab1:
             
             # Simular análisis con Claude (en demo)
             if operation_mode == "🎭 Demo (Sin API)":
-                # Aquí usaríamos Claude API directamente
-                # analysis_result = analyze_invoice_with_claude(pdf_text)
-                # Intentar usar Claude API si hay key
-                try:
-                    from claude_api import analyze_invoice_with_claude_api
-                    analysis_result = analyze_invoice_with_claude_api(pdf_text)
-                except:
-                    # Fallback a simulación
-                    analysis_result = analyze_invoice_with_claude(pdf_text)
+                analysis_result = analyze_invoice_with_claude(pdf_text)
                 st.session_state.extracted_data = analysis_result
+                
                 # Agregar mensaje inicial de Claude
                 initial_message = generate_initial_analysis_message(analysis_result)
                 st.session_state.messages.append({
@@ -672,10 +757,10 @@ with tab1:
                 st.rerun()
         
         with col2:
-            if st.button("Explícame los montos", use_container_width=True):
+            if st.button("Explícame los montos y la moneda", use_container_width=True):
                 st.session_state.messages.append({
                     "role": "user",
-                    "content": "Explícame cómo calculaste los montos"
+                    "content": "Explícame cómo detectaste la moneda y los montos"
                 })
                 st.rerun()
         
@@ -692,6 +777,32 @@ with tab2:
     
     if st.session_state.extracted_data:
         data = st.session_state.extracted_data
+        
+        # Badge de moneda
+        currency = data.get('currency', 'ARS')
+        currency_symbol = data.get('currencySymbol', '$')
+        currency_class = {
+            'USD': 'currency-usd',
+            'ARS': 'currency-ars',
+            'EUR': 'currency-eur'
+        }.get(currency, 'currency-ars')
+        
+        currency_emoji = {
+            'USD': '💵',
+            'ARS': '💰',
+            'EUR': '💶'
+        }.get(currency, '💰')
+        
+        st.markdown(f"""
+        <div class="currency-badge {currency_class}">
+            {currency_emoji} Moneda: {currency} ({currency_symbol})
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Mostrar razonamiento de moneda si existe
+        currency_reasoning = data.get('reasoning', {}).get('currency')
+        if currency_reasoning:
+            st.info(f"💭 **¿Cómo detecté la moneda?** {currency_reasoning}")
         
         # Mostrar campos en categorías
         col1, col2 = st.columns(2)
@@ -713,6 +824,21 @@ with tab2:
                 data.get('supplier', {}).get('address', 'No detectado'),
                 data.get('confidence', {}).get('supplier_address', 0.85)
             )
+            
+            # Información del cliente
+            if data.get('client', {}).get('name'):
+                st.markdown("#### 👤 Información del Cliente")
+                display_field_with_confidence(
+                    "Nombre",
+                    data.get('client', {}).get('name', 'No detectado'),
+                    data.get('confidence', {}).get('client_name', 0.90)
+                )
+                if data.get('client', {}).get('code'):
+                    display_field_with_confidence(
+                        "Código",
+                        data.get('client', {}).get('code', 'No detectado'),
+                        0.95
+                    )
             
             st.markdown("#### 📄 Información de la Factura")
             display_field_with_confidence(
@@ -749,25 +875,25 @@ with tab2:
                 data.get('confidence', {}).get('due_date', 0.90)
             )
             
-            st.markdown("#### 💰 Montos")
+            st.markdown(f"#### 💰 Montos ({currency})")
             display_field_with_confidence(
                 "Total",
-                f"${data.get('amount') or 0:,.2f}" if data.get('amount') is not None else "No detectado",
+                f"{currency_symbol}{data.get('amount') or 0:,.2f}" if data.get('amount') is not None else "No detectado",
                 data.get('confidence', {}).get('amount', 0.98)
             )
             display_field_with_confidence(
                 "IVA",
-                f"${data.get('iva') or 0:,.2f}" if data.get('iva') is not None else "No detectado",
+                f"{currency_symbol}{data.get('iva') or 0:,.2f}" if data.get('iva') is not None else "No detectado",
                 data.get('confidence', {}).get('iva', 0.95)
             )
             display_field_with_confidence(
                 "Subtotal Gravado",
-                f"${data.get('amountGrav') or 0:,.2f}" if data.get('amountGrav') is not None else "No detectado",
+                f"{currency_symbol}{data.get('amountGrav') or 0:,.2f}" if data.get('amountGrav') is not None else "No detectado",
                 data.get('confidence', {}).get('amount_grav', 0.90)
             )
             display_field_with_confidence(
                 "No Gravado",
-                f"${data.get('amountNoGrav') or 0:,.2f}" if data.get('amountNoGrav') is not None else "No detectado",
+                f"{currency_symbol}{data.get('amountNoGrav') or 0:,.2f}" if data.get('amountNoGrav') is not None else "No detectado",
                 data.get('confidence', {}).get('amount_no_grav', 0.85)
             )
         
@@ -780,14 +906,14 @@ with tab2:
                     "#": i,
                     "Descripción": item.get('description', ''),
                     "Cantidad": item.get('quantity', 0),
-                    "Precio Unit.": f"${item.get('unit_price', 0):,.2f}",
-                    "Total": f"${item.get('total', 0):,.2f}"
+                    "Precio Unit.": f"{currency_symbol}{item.get('unit_price', 0):,.2f}",
+                    "Total": f"{currency_symbol}{item.get('total', 0):,.2f}"
                 })
             
             st.dataframe(items_df, use_container_width=True)
         
         # JSON completo
-        st.markdown("#### 📤 JSON para Caja de Pagos")
+        st.markdown("#### 📤 JSON para tu Sistema")
         
         # Preparar JSON final
         final_json = prepare_final_json(data)
@@ -808,8 +934,7 @@ with tab2:
             )
             
             if st.button("📋 Copiar al portapapeles", use_container_width=True):
-                st.write("JSON copiado!")
-                # En un entorno real, usarías JavaScript para copiar al portapapeles
+                st.write("¡JSON listo para copiar!")
     else:
         st.info("👆 Sube una factura para ver los datos extraídos")
 
@@ -828,14 +953,11 @@ with tab3:
         st.info("👆 Sube una factura para ver su contenido")
 
 
-# Funciones auxiliares
-
-
 # Footer
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666;">
-    <p>🤖 Powered by AWS Bedrock + Claude Sonnet 4 | 📄 Invoice Extractor v1.0</p>
-    <p style="font-size: 0.9em;">Demo interactivo - Los datos mostrados son simulados en modo demo</p>
+    <p>🤖 Powered by Claude Sonnet 4 | 📄 Invoice Extractor v2.0</p>
+    <p style="font-size: 0.9em;">Con detección automática de moneda (USD/ARS/EUR)</p>
 </div>
 """, unsafe_allow_html=True)
