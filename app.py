@@ -44,6 +44,8 @@ def analyze_invoice_with_claude(pdf_text):
             'amountGrav': 0,
             'amountNoGrav': 0,
             'amountExen': 0,
+            'otherTaxes': 0,
+            'ivaBreakdown': {},
             'cae': None,
             'items': [],
             'confidence': {},
@@ -497,10 +499,6 @@ Los montos totales son correctos, solo que no están desglosados línea por lín
 ¿Qué te gustaría saber específicamente? Puedo darte detalles sobre cualquiera de estos aspectos. 🤔"""
 
 
-
-
-
-
 def display_field_with_confidence(label, value, confidence):
     """Muestra un campo con su nivel de confianza
     Si el valor contiene "No detectado", automáticamente setea confianza a 0%"""
@@ -530,7 +528,67 @@ def display_field_with_confidence(label, value, confidence):
     """, unsafe_allow_html=True)
 
 
-
+def prepare_final_json(data):
+    """Prepara el JSON final para enviar al sistema con campos OC/HES/HEM en items"""
+    
+    # Detectar moneda del análisis
+    currency = data.get('currency', 'ARS')
+    
+    # Procesar items para convertir nombres de campos a siglas
+    items = []
+    for item in data.get('items', []):
+        processed_item = {
+            "description": item.get('description'),
+            "quantity": item.get('quantity'),
+            "unit_price": item.get('unit_price'),
+            "total": item.get('total'),
+            "discount": item.get('discount')
+        }
+        
+        # Cambiar nombres de campos a siglas - OC
+        if item.get('orden_compra'):
+            processed_item['oc'] = item['orden_compra']
+        elif item.get('oc'):
+            processed_item['oc'] = item['oc']
+        
+        # HES - Hoja de Entrada de Servicio
+        if item.get('hoja_entrada_servicio'):
+            processed_item['hes'] = item['hoja_entrada_servicio']
+        elif item.get('hes'):
+            processed_item['hes'] = item['hes']
+        
+        # HEM - Hoja de Entrada de Materiales
+        if item.get('hoja_entrada_materiales'):
+            processed_item['hem'] = item['hoja_entrada_materiales']
+        elif item.get('hem'):
+            processed_item['hem'] = item['hem']
+        
+        items.append(processed_item)
+    
+    return {
+        "supplier": data.get('supplier', {}),
+        "client": data.get('client', {}),
+        "currency": currency,
+        "currencySymbol": data.get('currencySymbol', '$'),
+        "invoiceType": data.get('invoiceType'),
+        "invoiceNumber": data.get('invoiceNumber'),
+        "pointSale": data.get('pointSale'),
+        "documentDate": data.get('documentDate'),
+        "dueDate": data.get('dueDate'),
+        "amount": data.get('amount'),
+        "iva": data.get('iva'),
+        "amountGrav": data.get('amountGrav'),
+        "amountNoGrav": data.get('amountNoGrav'),
+        "amountExen": data.get('amountExen'),
+        "otherTaxes": data.get('otherTaxes'),
+        "ivaBreakdown": data.get('ivaBreakdown', {}),
+        "cae": data.get('cae'),
+        "taxCode": data.get('taxCode'),
+        "exchangeType": "1",
+        "active": True,
+        "hasPo": False,
+        "items": items
+    }
 
 
 def convert_date_format(date_str):
@@ -1088,14 +1146,24 @@ with tab2:
             
             items_df = []
             for i, item in enumerate(data['items'], 1):
-                items_df.append({
+                row = {
                     "#": i,
                     "Descripción": item.get('description', ''),
                     "Cantidad": item.get('quantity', 0),
                     "Precio Unit.": f"{currency_symbol}{item.get('unit_price', 0):,.2f}",
                     "Descuento": f"{currency_symbol}{abs(item.get('discount', 0)):,.2f}",
                     "Total": f"{currency_symbol}{item.get('total', 0):,.2f}"
-                })
+                }
+                
+                # Agregar OC, HES, HEM si existen
+                if item.get('orden_compra') or item.get('oc'):
+                    row['OC'] = item.get('orden_compra') or item.get('oc')
+                if item.get('hoja_entrada_servicio') or item.get('hes'):
+                    row['HES'] = item.get('hoja_entrada_servicio') or item.get('hes')
+                if item.get('hoja_entrada_materiales') or item.get('hem'):
+                    row['HEM'] = item.get('hoja_entrada_materiales') or item.get('hem')
+                
+                items_df.append(row)
             
             st.dataframe(items_df, use_container_width=True)
         
@@ -1148,7 +1216,7 @@ with tab3:
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666;">
-    <p>🤖 Powered by Claude Sonnet 4 | 📄 Recepcion inteligente de documentos - Cajadepagos v2.1</p>
-    <p style="font-size: 0.9em;">Con layout mejorado, streaming en chat y detección automática de moneda</p>
+    <p>🤖 Powered by Claude Sonnet 4 | 📄 Recepcion inteligente de documentos - Cajadepagos v2.2</p>
+    <p style="font-size: 0.9em;">Con campos OC/HES/HEM, layout mejorado, streaming en chat y detección automática de moneda</p>
 </div>
 """, unsafe_allow_html=True)
