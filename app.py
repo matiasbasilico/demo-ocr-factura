@@ -198,9 +198,11 @@ def generate_initial_analysis_message(data):
 - Exento: {currency_symbol}{data.get('amountExen') or 0:,.2f}
 """
     
-    # Agregar IVAs detectados
+    # Agregar IVAs detectados SOLO si hay desglose real
     iva_breakdown = data.get('ivaBreakdown', {})
-    if iva_breakdown and any(iva_breakdown.values()):
+    has_breakdown = any(v > 0 for v in iva_breakdown.values()) if iva_breakdown else False
+    
+    if has_breakdown:
         message += "\n**📊 IVAs Detectados:**\n"
         iva_labels = {
             'iva_0': '0%',
@@ -214,6 +216,8 @@ def generate_initial_analysis_message(data):
             iva_amount = iva_breakdown.get(iva_key, 0)
             if iva_amount and iva_amount > 0:
                 message += f"- IVA {iva_label}: {currency_symbol}{iva_amount:,.2f}\n"
+    elif data.get('iva', 0) > 0:
+        message += f"\n**📊 IVA:** {currency_symbol}{data.get('iva'):,.2f} (sin desglose por alícuota)\n"
     
     # Agregar documentos asociados (OC, HES, HEM) si existen en los items
     items = data.get('items', [])
@@ -322,9 +326,11 @@ def generate_chat_response(user_input, extracted_data, pdf_text):
 - Exento: {currency_symbol}{extracted_data.get('amountExen') or 0:,.2f}
 """
         
-        # Agregar IVAs
+        # Agregar IVAs SOLO si hay desglose real
         iva_breakdown = extracted_data.get('ivaBreakdown', {})
-        if iva_breakdown and any(iva_breakdown.values()):
+        has_breakdown = any(v > 0 for v in iva_breakdown.values()) if iva_breakdown else False
+        
+        if has_breakdown:
             response += "\n**📊 DESGLOSE DE IVAs:**\n"
             iva_labels = {
                 'iva_0': '0%',
@@ -338,6 +344,8 @@ def generate_chat_response(user_input, extracted_data, pdf_text):
                 iva_amount = iva_breakdown.get(iva_key, 0)
                 if iva_amount and iva_amount > 0:
                     response += f"- IVA {iva_label}: {currency_symbol}{iva_amount:,.2f}\n"
+        elif extracted_data.get('iva', 0) > 0:
+            response += f"\n**📊 IVA TOTAL:** {currency_symbol}{extracted_data.get('iva'):,.2f} (sin desglose por alícuota)\n"
         
         # Agregar documentos asociados
         items = extracted_data.get('items', [])
@@ -394,9 +402,11 @@ def generate_chat_response(user_input, extracted_data, pdf_text):
 {iva_reasoning}
 """
         
-        # Agregar desglose de IVAs
+        # Agregar desglose de IVAs SOLO si hay alguno con valor > 0
         iva_breakdown = extracted_data.get('ivaBreakdown', {})
-        if iva_breakdown and any(iva_breakdown.values()):
+        has_breakdown = any(v > 0 for v in iva_breakdown.values()) if iva_breakdown else False
+        
+        if has_breakdown:
             response += "\n**📊 Desglose por alícuota:**\n"
             iva_labels = {
                 'iva_0': '0%',
@@ -410,6 +420,8 @@ def generate_chat_response(user_input, extracted_data, pdf_text):
                 iva_amount = iva_breakdown.get(iva_key, 0)
                 if iva_amount and iva_amount > 0:
                     response += f"- IVA {iva_label}: {currency_symbol}{iva_amount:,.2f}\n"
+        else:
+            response += "\n**ℹ️ Nota:** El documento no especifica el desglose de IVA por alícuota, solo el monto total.\n"
         
         response += f"\n{'Estoy muy seguro de estos valores.' if iva_conf > 0.95 else 'Podría requerir verificación manual.'}\n\n¿Te gustaría que revise algún otro campo?"
         

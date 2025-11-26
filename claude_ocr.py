@@ -107,13 +107,18 @@ CAMPOS A BUSCAR (extrae todos los que encuentres):
 - Total a pagar (el monto final)
 - Subtotal / Importe Neto Gravado
 - Otros Tributos
-- IVA/Tax/Impuestos - DESGLOSE DETALLADO de TODOS los porcentajes encontrados:
-  * IVA 0%: $ monto (si existe)
-  * IVA 2.5%: $ monto (si existe)
-  * IVA 5%: $ monto (si existe)
-  * IVA 10.5%: $ monto (si existe)
-  * IVA 21%: $ monto (si existe)
-  * IVA 27%: $ monto (si existe)
+- IVA/Tax/Impuestos - CRÍTICO SOBRE DESGLOSE:
+  * SOLO incluye en ivaBreakdown las alícuotas que estén EXPLÍCITAMENTE mencionadas con formato:
+    - "IVA 0%: $X" o "IVA 0%: X"
+    - "IVA 2.5%: $X" o "IVA 2,5%: X"
+    - "IVA 5%: $X"
+    - "IVA 10.5%: $X" o "IVA 10,5%: X"
+    - "IVA 21%: $X"
+    - "IVA 27%: $X"
+  * Si el documento solo dice "I.V.A. INSC. %" o "IVA:" sin especificar alícuota → NO inventes el desglose
+  * Si el documento solo dice "IVA" con un monto total → pon ese monto en el campo "iva" pero deja ivaBreakdown en ceros
+  * NO ASUMAS que es IVA 21% si no está explícito
+  * Si no hay desglose explícito, todos los valores de ivaBreakdown deben ser 0.00
 - Monto gravado
 - Monto no gravado
 - Monto exento
@@ -221,7 +226,7 @@ Responde ÚNICAMENTE con un JSON válido (sin ```json, sin markdown, sin explica
     "invoice_type": "Encontré 'Código 01' que corresponde a Factura Tipo A según AFIP",
     "amount": "Total de $360,564.27 claramente marcado como 'Importe Total'",
     "currency": "Detecté ARS porque: (1) documento en español, (2) CUIT argentino 20232505088, (3) CAE 74108913004192 presente, (4) referencias a AFIP",
-    "iva_breakdown": "Desglosé los IVAs: IVA 21%: $62,577.27 sobre base de $297,987.00",
+    "iva_breakdown": "Desglosé los IVAs explícitos: IVA 21%: $62,577.27 sobre base de $297,987.00. Los demás están en 0 porque no aparecen en el documento.",
     "orden_compra": "Encontré OC: 4527976895 en la columna de detalle del item",
     "hoja_entrada_servicio": "Encontré HES: 1024526137 en la misma línea del item",
     "hoja_entrada_materiales": "No encontré ninguna referencia a HEM en el documento"
@@ -235,10 +240,15 @@ REGLAS IMPORTANTES:
 - NO inventes información que no esté en el texto
 - La confianza debe reflejar qué tan seguro estás (0.0 = nada seguro, 1.0 = completamente seguro)
 - En reasoning, explica BREVEMENTE cómo encontraste los campos más importantes
-- Para ivaBreakdown, extrae TODOS los porcentajes mencionados, usa 0.00 si no existe ese porcentaje
+- **CRÍTICO - DESGLOSE DE IVA:**
+  * Solo incluye valores en ivaBreakdown si el documento dice EXPLÍCITAMENTE "IVA X%: $monto"
+  * Si solo dice "I.V.A. INSC. %" o "IVA: $monto" sin alícuota → todos los ivaBreakdown en 0.00
+  * Ejemplo 1: Documento dice "IVA 21%: $62,577.27" → iva_21: 62577.27
+  * Ejemplo 2: Documento dice "I.V.A. INSC. %: 6546.96" → TODOS los ivaBreakdown en 0.00, iva: 6546.96
+  * Ejemplo 3: No menciona IVA → iva: 0.00 y todos los ivaBreakdown en 0.00
+  * NO asumas la alícuota basándote en el país o tipo de factura
 - Para OC, HES, HEM: incluye el número exacto si está presente, sino usa null
 - Si encuentras OC/HES/HEM, también inclúyelos en el reasoning explicando dónde los encontraste
-- La suma de todos los IVAs en ivaBreakdown debe ser igual al campo "iva"
 """
 
     try:
@@ -285,12 +295,6 @@ REGLAS IMPORTANTES:
             result['currency'] = 'ARS'
             result['currencySymbol'] = '$'
             result['reasoning']['currency'] = 'No se pudo determinar con certeza, asumiendo ARS por defecto'
-        
-        # Calcular IVA total sumando todos los IVAs del breakdown
-        if result.get('ivaBreakdown'):
-            total_iva = sum(result['ivaBreakdown'].values())
-            if total_iva > 0 and not result.get('iva'):
-                result['iva'] = total_iva
         
         return result
         
