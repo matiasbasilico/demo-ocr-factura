@@ -1,5 +1,5 @@
 """
-Recepcion inteligente de documentos - Cajadepagos -   con Claude Sonnet 4
+Recepcion inteligente de documentos - Cajadepagos - con Claude Sonnet 4
 Aplicación de demostración con chat inteligente para extraer datos de facturas
 Con detección automática de moneda (USD/ARS/EUR/etc) y streaming en chat
 """
@@ -142,7 +142,7 @@ def analyze_invoice_with_claude(pdf_text):
 
 
 def generate_initial_analysis_message(data):
-    """Genera el mensaje inicial de análisis de Claude con TODOS los campos"""
+    """Genera el mensaje inicial de análisis de Claude con TODOS los campos incluyendo OC/HES/HEM"""
     
     supplier_name = data.get('supplier', {}).get('name', 'el proveedor')
     invoice_number = data.get('invoiceNumber', 'sin número')
@@ -193,15 +193,63 @@ def generate_initial_analysis_message(data):
 
 **💰 Montos ({currency}):**
 - Total: {currency_symbol}{data.get('amount') or 0:,.2f}
-- IVA: {currency_symbol}{data.get('iva') or 0:,.2f}
 - Subtotal Gravado: {currency_symbol}{data.get('amountGrav') or 0:,.2f}
 - No Gravado: {currency_symbol}{data.get('amountNoGrav') or 0:,.2f}
 - Exento: {currency_symbol}{data.get('amountExen') or 0:,.2f}
-
-📊 **Campos con alta confianza (>95%):**
 """
     
+    # Agregar IVAs detectados
+    iva_breakdown = data.get('ivaBreakdown', {})
+    if iva_breakdown and any(iva_breakdown.values()):
+        message += "\n**📊 IVAs Detectados:**\n"
+        iva_labels = {
+            'iva_0': '0%',
+            'iva_2_5': '2.5%',
+            'iva_5': '5%',
+            'iva_10_5': '10.5%',
+            'iva_21': '21%',
+            'iva_27': '27%'
+        }
+        for iva_key, iva_label in iva_labels.items():
+            iva_amount = iva_breakdown.get(iva_key, 0)
+            if iva_amount and iva_amount > 0:
+                message += f"- IVA {iva_label}: {currency_symbol}{iva_amount:,.2f}\n"
+    
+    # Agregar documentos asociados (OC, HES, HEM) si existen en los items
+    items = data.get('items', [])
+    if items:
+        oc_found = []
+        hes_found = []
+        hem_found = []
+        
+        for item in items:
+            if item.get('orden_compra') or item.get('oc'):
+                oc_val = item.get('orden_compra') or item.get('oc')
+                if oc_val not in oc_found:
+                    oc_found.append(oc_val)
+            
+            if item.get('hoja_entrada_servicio') or item.get('hes'):
+                hes_val = item.get('hoja_entrada_servicio') or item.get('hes')
+                if hes_val not in hes_found:
+                    hes_found.append(hes_val)
+            
+            if item.get('hoja_entrada_materiales') or item.get('hem'):
+                hem_val = item.get('hoja_entrada_materiales') or item.get('hem')
+                if hem_val not in hem_found:
+                    hem_found.append(hem_val)
+        
+        if oc_found or hes_found or hem_found:
+            message += "\n**📎 Documentos Asociados:**\n"
+            if oc_found:
+                message += f"- OC (Orden de Compra): {', '.join(oc_found)}\n"
+            if hes_found:
+                message += f"- HES (Hoja Entrada Servicio): {', '.join(hes_found)}\n"
+            if hem_found:
+                message += f"- HEM (Hoja Entrada Materiales): {', '.join(hem_found)}\n"
+    
     # Agregar campos con alta confianza
+    message += "\n📊 **Campos con alta confianza (>95%):**\n"
+    
     high_confidence_fields = []
     for field, confidence in data.get('confidence', {}).items():
         # Normalizar confianza
@@ -210,7 +258,7 @@ def generate_initial_analysis_message(data):
             high_confidence_fields.append(f"✅ {field.replace('_', ' ').title()}: {conf_normalized:.0%}")
     
     if high_confidence_fields:
-        message += "\n" + "\n".join(high_confidence_fields)
+        message += "\n".join(high_confidence_fields)
     
     # Calcular confianza promedio normalizada
     confidences = [c if c <= 1 else c/100 for c in data.get('confidence', {}).values()]
@@ -223,10 +271,10 @@ def generate_initial_analysis_message(data):
 - Confianza promedio: {avg_conf:.1f}%
 
 💡 **Puedes preguntarme:**
-- "¿Cómo encontraste el IVA?"
+- "¿Cómo encontraste el CUIT?"
 - "¿Qué tan seguro estás del CAE?"
 - "Explícame todos los montos"
-- "¿Hay campos dudosos?"
+- "Muéstrame los IVAs detectados"
 
 ¿Hay algo en particular que quieras que revise? 🤔"""
     
@@ -236,7 +284,7 @@ def generate_initial_analysis_message(data):
 def generate_chat_response(user_input, extracted_data, pdf_text):
     """
     Genera una respuesta conversacional basada en la pregunta del usuario.
-    Ahora con soporte para streaming.
+    Ahora incluye información sobre OC, HES, HEM e IVAs.
     """
     user_input_lower = user_input.lower()
     
@@ -245,7 +293,7 @@ def generate_chat_response(user_input, extracted_data, pdf_text):
         currency = extracted_data.get('currency', 'ARS')
         currency_symbol = extracted_data.get('currencySymbol', '$')
         
-        return f"""Aquí está la lista COMPLETA de todos los campos detectados:
+        response = f"""Aquí está la lista COMPLETA de todos los campos detectados:
 
 🏢 **PROVEEDOR:**
 - CUIT: {extracted_data.get('supplier', {}).get('cuit', 'No detectado')}
@@ -269,12 +317,62 @@ def generate_chat_response(user_input, extracted_data, pdf_text):
 
 💰 **MONTOS ({currency}):**
 - Total: {currency_symbol}{extracted_data.get('amount') or 0:,.2f}
-- IVA: {currency_symbol}{extracted_data.get('iva') or 0:,.2f}
 - Subtotal Gravado: {currency_symbol}{extracted_data.get('amountGrav') or 0:,.2f}
 - No Gravado: {currency_symbol}{extracted_data.get('amountNoGrav') or 0:,.2f}
 - Exento: {currency_symbol}{extracted_data.get('amountExen') or 0:,.2f}
-
-¿Querés que te explique cómo detecté algún campo en particular?"""
+"""
+        
+        # Agregar IVAs
+        iva_breakdown = extracted_data.get('ivaBreakdown', {})
+        if iva_breakdown and any(iva_breakdown.values()):
+            response += "\n**📊 DESGLOSE DE IVAs:**\n"
+            iva_labels = {
+                'iva_0': '0%',
+                'iva_2_5': '2.5%',
+                'iva_5': '5%',
+                'iva_10_5': '10.5%',
+                'iva_21': '21%',
+                'iva_27': '27%'
+            }
+            for iva_key, iva_label in iva_labels.items():
+                iva_amount = iva_breakdown.get(iva_key, 0)
+                if iva_amount and iva_amount > 0:
+                    response += f"- IVA {iva_label}: {currency_symbol}{iva_amount:,.2f}\n"
+        
+        # Agregar documentos asociados
+        items = extracted_data.get('items', [])
+        if items:
+            oc_found = []
+            hes_found = []
+            hem_found = []
+            
+            for item in items:
+                if item.get('orden_compra') or item.get('oc'):
+                    oc_val = item.get('orden_compra') or item.get('oc')
+                    if oc_val not in oc_found:
+                        oc_found.append(oc_val)
+                
+                if item.get('hoja_entrada_servicio') or item.get('hes'):
+                    hes_val = item.get('hoja_entrada_servicio') or item.get('hes')
+                    if hes_val not in hes_found:
+                        hes_found.append(hes_val)
+                
+                if item.get('hoja_entrada_materiales') or item.get('hem'):
+                    hem_val = item.get('hoja_entrada_materiales') or item.get('hem')
+                    if hem_val not in hem_found:
+                        hem_found.append(hem_val)
+            
+            if oc_found or hes_found or hem_found:
+                response += "\n**📎 DOCUMENTOS ASOCIADOS:**\n"
+                if oc_found:
+                    response += f"- OC (Orden de Compra): {', '.join(oc_found)}\n"
+                if hes_found:
+                    response += f"- HES (Hoja Entrada Servicio): {', '.join(hes_found)}\n"
+                if hem_found:
+                    response += f"- HEM (Hoja Entrada Materiales): {', '.join(hem_found)}\n"
+        
+        response += "\n¿Querés que te explique cómo detecté algún campo en particular?"
+        return response
     
     # Respuesta sobre IVA
     if 'iva' in user_input_lower:
@@ -287,17 +385,35 @@ def generate_chat_response(user_input, extracted_data, pdf_text):
         
         currency_symbol = extracted_data.get('currencySymbol', '$')
         
-        return f"""Sobre el IVA:
+        response = f"""Sobre el IVA:
 
-💰 **Valor detectado:** {currency_symbol}{iva:,.2f}
+💰 **Valor total IVA:** {currency_symbol}{iva:,.2f}
 🎯 **Confianza:** {iva_conf:.0%}
 
 💭 **Mi razonamiento:**
 {iva_reasoning}
-
-Busqué en la factura términos como "IVA", "Impuesto Interno", "Tax" y encontré este monto en la sección de desglose de impuestos. {"Estoy muy seguro de este valor." if iva_conf > 0.95 else "Podría requerir verificación manual."}
-
-¿Te gustaría que revise algún otro campo?"""
+"""
+        
+        # Agregar desglose de IVAs
+        iva_breakdown = extracted_data.get('ivaBreakdown', {})
+        if iva_breakdown and any(iva_breakdown.values()):
+            response += "\n**📊 Desglose por alícuota:**\n"
+            iva_labels = {
+                'iva_0': '0%',
+                'iva_2_5': '2.5%',
+                'iva_5': '5%',
+                'iva_10_5': '10.5%',
+                'iva_21': '21%',
+                'iva_27': '27%'
+            }
+            for iva_key, iva_label in iva_labels.items():
+                iva_amount = iva_breakdown.get(iva_key, 0)
+                if iva_amount and iva_amount > 0:
+                    response += f"- IVA {iva_label}: {currency_symbol}{iva_amount:,.2f}\n"
+        
+        response += f"\n{'Estoy muy seguro de estos valores.' if iva_conf > 0.95 else 'Podría requerir verificación manual.'}\n\n¿Te gustaría que revise algún otro campo?"
+        
+        return response
     
     # Respuesta sobre CAE
     if 'cae' in user_input_lower:
@@ -324,7 +440,7 @@ El CAE es el código de 14 dígitos que emite AFIP para autorizar facturas elect
     if 'cuit' in user_input_lower:
         cuit = extracted_data.get('supplier', {}).get('cuit', 'No detectado')
         confidence = extracted_data.get('confidence', {}).get('supplier_cuit', 0)
-        reasoning = extracted_data.get('reasoning', {}).get('supplier_cuit', '')
+        reasoning = extracted_data.get('reasoning', {}).get('supplier_cuit', 'Busqué el formato XX-XXXXXXXX-X en el encabezado del documento')
         
         # Normalizar confianza
         if confidence > 1:
@@ -621,7 +737,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS personalizado - MEJORADO PARA LAYOUT VERTICAL
+# CSS personalizado
 st.markdown("""
 <style>
     .main-header {
@@ -801,7 +917,7 @@ with st.sidebar:
         st.rerun()
 
 # Header principal
-st.markdown('<div class="main-header">📄 Recepcion inteligente de documentos - Cajadepagos -  </div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">📄 Recepcion inteligente de documentos - Cajadepagos</div>', unsafe_allow_html=True)
 
 # Tabs principales
 tab1, tab2, tab3 = st.tabs(["💬 Chat Inteligente", "📋 Datos Extraídos", "📄 Vista del PDF"])
@@ -988,13 +1104,13 @@ with tab1:
                 st.rerun()
         
         with col3:
-            if st.button("¿Hay campos dudosos?", use_container_width=True, key="btn_dudoso"):
+            if st.button("¿Cómo encontraste el CUIT?", use_container_width=True, key="btn_cuit"):
                 st.session_state.messages.append({
                     "role": "user",
-                    "content": "¿Hay algún campo del que no estés seguro?"
+                    "content": "¿Cómo encontraste el CUIT?"
                 })
                 response = generate_chat_response(
-                    "¿Hay algún campo del que no estés seguro?",
+                    "¿Cómo encontraste el CUIT?",
                     st.session_state.extracted_data,
                     st.session_state.pdf_text
                 )
@@ -1107,12 +1223,27 @@ with tab2:
                 data.get('confidence', {}).get('due_date', 0.90)
             )
             
-
-
-            # Desglose de IVAs
+            st.markdown(f"#### 💰 Montos ({currency})")
+            display_field_with_confidence(
+                "Total",
+                f"{currency_symbol}{data.get('amount') or 0:,.2f}" if data.get('amount') is not None else "No detectado",
+                data.get('confidence', {}).get('amount', 0.98)
+            )
+            display_field_with_confidence(
+                "Subtotal Gravado",
+                f"{currency_symbol}{data.get('amountGrav') or 0:,.2f}" if data.get('amountGrav') is not None else "No detectado",
+                data.get('confidence', {}).get('amount_grav', 0.90)
+            )
+            display_field_with_confidence(
+                "No Gravado",
+                f"{currency_symbol}{data.get('amountNoGrav') or 0:,.2f}" if data.get('amountNoGrav') is not None else "No detectado",
+                data.get('confidence', {}).get('amount_no_grav', 0.85)
+            )
+            
+            # Desglose de IVAs en cards
             iva_breakdown = data.get('ivaBreakdown', {})
             if iva_breakdown and any(iva_breakdown.values()):
-                st.markdown("**📊 Desglose de IVAs Detectados:**")
+                st.markdown("#### 📊 Desglose de IVAs Detectados:")
                 
                 iva_rates = [
                     ('iva_0', '0%'),
@@ -1123,21 +1254,15 @@ with tab2:
                     ('iva_27', '27%')
                 ]
                 
-                iva_cols = st.columns(2)
-                col_idx = 0
                 for iva_key, iva_label in iva_rates:
                     iva_amount = iva_breakdown.get(iva_key, 0)
                     if iva_amount and iva_amount > 0:
-                        with iva_cols[col_idx % 2]:
-                            iva_text = f"IVA {iva_label}"
-                            iva_value = f"{currency_symbol}{iva_amount:,.2f}"
-                            st.markdown(f"""
-                            <div class='field-box'>
-                                <strong>{iva_text}:</strong> {iva_value}<br>
-                                <span class='confidence-high'>✅ Detectado</span>
-                            </div>
-                            """, unsafe_allow_html=True)
-                        col_idx += 1
+                        st.markdown(f"""
+                        <div class='field-box'>
+                            <strong>IVA {iva_label}:</strong> {currency_symbol}{iva_amount:,.2f}<br>
+                            <span class='confidence-high'>✅ Detectado</span>
+                        </div>
+                        """, unsafe_allow_html=True)
             
             # Otros Tributos
             other_taxes = data.get('otherTaxes', 0)
@@ -1147,7 +1272,10 @@ with tab2:
                     f"{currency_symbol}{other_taxes:,.2f}",
                     data.get('confidence', {}).get('other_taxes', 0.85)
                 )
-
+        
+        # Items/Líneas - AHORA ANTES DEL JSON
+        if data.get('items'):
+            st.markdown("#### 📦 Items de la Factura")
             items_df = []
             for i, item in enumerate(data['items'], 1):
                 row = {
@@ -1171,10 +1299,10 @@ with tab2:
             
             st.dataframe(items_df, use_container_width=True)
         
-        # JSON completo
+        # JSON completo - TÍTULO CAMBIADO
         st.markdown("""
         <div class="section-group">
-            <div class="section-title">📤 JSON para tu Sistema</div>
+            <div class="section-title">📤 JSON que verificará un agente de CDP y confirmará</div>
         </div>
         """, unsafe_allow_html=True)
         
@@ -1220,7 +1348,7 @@ with tab3:
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666;">
-    <p>🤖 Powered by Claude Sonnet 4 | 📄 Recepcion inteligente de documentos - Cajadepagos v2.2</p>
-    <p style="font-size: 0.9em;">Con campos OC/HES/HEM, layout mejorado, streaming en chat y detección automática de moneda</p>
+    <p>🤖 Powered by Claude Sonnet 4 | 📄 Recepcion inteligente de documentos - Cajadepagos v2.3</p>
+    <p style="font-size: 0.9em;">Con campos OC/HES/HEM, IVAs desglosados, y detección automática de moneda</p>
 </div>
 """, unsafe_allow_html=True)

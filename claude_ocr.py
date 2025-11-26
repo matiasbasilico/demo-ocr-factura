@@ -1,7 +1,7 @@
 """
 claude_ocr.py
 Extracción inteligente de facturas usando Claude API con detección automática de moneda
-Versión mejorada con soporte para OC, HES, HEM y desglose de IVAs
+Versión mejorada con soporte para OC, HES, HEM y desglose completo de IVAs
 """
 
 import anthropic
@@ -15,7 +15,7 @@ def extract_invoice_with_claude(pdf_text, api_key=None):
     Usa Claude API real para extraer datos de forma inteligente.
     Claude analiza el texto completo y extrae campos automáticamente.
     Detecta automáticamente la moneda (USD vs ARS) según el idioma y contexto.
-    Incluye nuevos campos: OC, HES, HEM y desglose de IVAs.
+    Incluye nuevos campos: OC, HES, HEM y desglose completo de IVAs.
     """
     
     if not api_key:
@@ -107,32 +107,47 @@ CAMPOS A BUSCAR (extrae todos los que encuentres):
 - Total a pagar (el monto final)
 - Subtotal / Importe Neto Gravado
 - Otros Tributos
-- IVA/Tax/Impuestos - DESGLOSE DETALLADO de TODOS los porcentajes:
-  * IVA 0%: $ monto
-  * IVA 2.5%: $ monto
-  * IVA 5%: $ monto
-  * IVA 10.5%: $ monto
-  * IVA 21%: $ monto
-  * IVA 27%: $ monto
+- IVA/Tax/Impuestos - DESGLOSE DETALLADO de TODOS los porcentajes encontrados:
+  * IVA 0%: $ monto (si existe)
+  * IVA 2.5%: $ monto (si existe)
+  * IVA 5%: $ monto (si existe)
+  * IVA 10.5%: $ monto (si existe)
+  * IVA 21%: $ monto (si existe)
+  * IVA 27%: $ monto (si existe)
 - Monto gravado
 - Monto no gravado
 - Monto exento
 
-**DOCUMENTOS ASOCIADOS (IMPORTANTE):**
-Busca en el detalle de items y extrae si existen:
-- OC (Orden de Compra) - busca "OC:" seguido de número (ej: OC: 4527976895)
-- HES (Hoja de Entrada de Servicio) - busca "HES:" seguido de número (ej: HES: 1024526137)
-- HEM (Hoja de Entrada de Materiales) - busca "HEM:" seguido de número (ej: HEM: 1024526137)
+**DOCUMENTOS ASOCIADOS (MUY IMPORTANTE):**
+Busca cuidadosamente en el detalle de items y extrae si existen:
+- **OC** (Orden de Compra) - busca patrones como:
+  * "OC:" seguido de número (ej: OC: 4527976895)
+  * "Orden de Compra:" seguido de número
+  * "Purchase Order:" seguido de número
+  * Cualquier referencia a número de orden
+  
+- **HES** (Hoja de Entrada de Servicio) - busca patrones como:
+  * "HES:" seguido de número (ej: HES: 1024526137)
+  * "Hoja de Entrada de Servicio:" seguido de número
+  * "Service Entry Sheet:" seguido de número
+  
+- **HEM** (Hoja de Entrada de Materiales) - busca patrones como:
+  * "HEM:" seguido de número (ej: HEM: 1024526137)
+  * "Hoja de Entrada de Materiales:" seguido de número
+  * "Material Entry Sheet:" seguido de número
+  * "Goods Receipt:" seguido de número
 
 **ITEMS/LÍNEAS (si los hay):**
+Para cada item detecta:
 - Descripción de cada item
 - Cantidad
 - Precio unitario
 - Total por línea
 - Descuentos/bonificaciones
-- Si contiene "OC:" → extrae como orden_compra
-- Si contiene "HES:" → extrae como hoja_entrada_servicio
-- Si contiene "HEM:" → extrae como hoja_entrada_materiales
+- Alícuota de IVA aplicada
+- Si contiene "OC:" → extrae como "orden_compra"
+- Si contiene "HES:" → extrae como "hoja_entrada_servicio"
+- Si contiene "HEM:" → extrae como "hoja_entrada_materiales"
 
 FORMATO DE RESPUESTA:
 Responde ÚNICAMENTE con un JSON válido (sin ```json, sin markdown, sin explicaciones adicionales) con esta estructura EXACTA:
@@ -198,16 +213,18 @@ Responde ÚNICAMENTE con un JSON válido (sin ```json, sin markdown, sin explica
     "currency": 0.95,
     "iva_breakdown": 0.98,
     "orden_compra": 0.95,
-    "hoja_entrada_servicio": 0.95
+    "hoja_entrada_servicio": 0.95,
+    "hoja_entrada_materiales": 0.00
   }},
   "reasoning": {{
-    "supplier_name": "Encontré 'FRENCHELI GUSTAVO LEANDRO' como proveedor",
+    "supplier_name": "Encontré 'FRENCHELI GUSTAVO LEANDRO' como proveedor en el encabezado",
     "invoice_type": "Encontré 'Código 01' que corresponde a Factura Tipo A según AFIP",
     "amount": "Total de $360,564.27 claramente marcado como 'Importe Total'",
-    "currency": "Detecté ARS porque: (1) documento en español, (2) CUIT argentino presente, (3) CAE presente",
-    "iva_breakdown": "Desglosé los IVAs encontrados: IVA 21%: $62,577.27 (otros 0)",
-    "orden_compra": "Encontré OC: 4527976895 en el detalle de items",
-    "hoja_entrada_servicio": "Encontré HES: 1024526137 en el detalle de items"
+    "currency": "Detecté ARS porque: (1) documento en español, (2) CUIT argentino 20232505088, (3) CAE 74108913004192 presente, (4) referencias a AFIP",
+    "iva_breakdown": "Desglosé los IVAs: IVA 21%: $62,577.27 sobre base de $297,987.00",
+    "orden_compra": "Encontré OC: 4527976895 en la columna de detalle del item",
+    "hoja_entrada_servicio": "Encontré HES: 1024526137 en la misma línea del item",
+    "hoja_entrada_materiales": "No encontré ninguna referencia a HEM en el documento"
   }}
 }}
 
@@ -218,8 +235,10 @@ REGLAS IMPORTANTES:
 - NO inventes información que no esté en el texto
 - La confianza debe reflejar qué tan seguro estás (0.0 = nada seguro, 1.0 = completamente seguro)
 - En reasoning, explica BREVEMENTE cómo encontraste los campos más importantes
-- Para ivaBreakdown, extrae TODOS los porcentajes mencionados (0%, 2.5%, 5%, 10.5%, 21%, 27%)
-- Para OC, HES, HEM: solo incluye si están presentes en el documento, sino usa null
+- Para ivaBreakdown, extrae TODOS los porcentajes mencionados, usa 0.00 si no existe ese porcentaje
+- Para OC, HES, HEM: incluye el número exacto si está presente, sino usa null
+- Si encuentras OC/HES/HEM, también inclúyelos en el reasoning explicando dónde los encontraste
+- La suma de todos los IVAs en ivaBreakdown debe ser igual al campo "iva"
 """
 
     try:
@@ -250,18 +269,28 @@ REGLAS IMPORTANTES:
         # Asegurar que tenga las claves mínimas
         if 'supplier' not in result:
             result['supplier'] = {}
+        if 'client' not in result:
+            result['client'] = {}
         if 'confidence' not in result:
             result['confidence'] = {}
         if 'reasoning' not in result:
             result['reasoning'] = {}
         if 'ivaBreakdown' not in result:
             result['ivaBreakdown'] = {}
+        if 'items' not in result:
+            result['items'] = []
         
         # Asegurar que tenga moneda (default ARS si no detecta)
         if 'currency' not in result:
             result['currency'] = 'ARS'
             result['currencySymbol'] = '$'
             result['reasoning']['currency'] = 'No se pudo determinar con certeza, asumiendo ARS por defecto'
+        
+        # Calcular IVA total sumando todos los IVAs del breakdown
+        if result.get('ivaBreakdown'):
+            total_iva = sum(result['ivaBreakdown'].values())
+            if total_iva > 0 and not result.get('iva'):
+                result['iva'] = total_iva
         
         return result
         
@@ -280,7 +309,7 @@ REGLAS IMPORTANTES:
 
 
 def test_extraction():
-    """Función de prueba"""
+    """Función de prueba con ejemplo que incluye OC, HES"""
     sample_text = """
     FRENCHELI GUSTAVO LEANDRO
     CUIT: 20232505088
@@ -291,9 +320,12 @@ def test_extraction():
     Cliente: LAN ARGENTINA SOCIEDAD ANONIMA
     CUIT: 30707542329
     
+    Detalle:
     Acceso Back Office Portal Proveedores
     OC: 4527976895
     HES: 1024526137
+    Cantidad: 1
+    Precio Unit.: $ 297987,00
     
     Importe Neto Gravado: $ 297987,00
     IVA 21%: $ 62577,27
