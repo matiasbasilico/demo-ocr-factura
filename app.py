@@ -331,7 +331,10 @@ def display_field_with_confidence(label, value, confidence):
     else:
         conf_class = "confidence-low"
         icon = "❌"
-    
+        
+    if confidence > 1:
+        confidence = confidence / 100
+
     st.markdown(f"""
     <div class="field-box">
         <strong>{label}:</strong> {value}<br>
