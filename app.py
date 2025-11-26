@@ -1078,15 +1078,22 @@ with tab2:
                 f"{currency_symbol}{data.get('iva') or 0:,.2f}" if data.get('iva') is not None else "No detectado",
                 data.get('confidence', {}).get('iva', 0.95)
             )
+
             display_field_with_confidence(
                 "Subtotal Gravado",
                 f"{currency_symbol}{data.get('amountGrav') or 0:,.2f}" if data.get('amountGrav') is not None else "No detectado",
                 data.get('confidence', {}).get('amount_grav', 0.90)
             )
+            
+            # No Gravado con confianza 0% si no se detecta
+            amount_no_grav_value = data.get('amountNoGrav')
+            amount_no_grav_text = f"{currency_symbol}{amount_no_grav_value or 0:,.2f}" if amount_no_grav_value is not None else "No detectado"
+            amount_no_grav_confidence = 0 if "No detectado" in amount_no_grav_text else data.get('confidence', {}).get('amount_no_grav', 0.85)
+            
             display_field_with_confidence(
                 "No Gravado",
-                f"{currency_symbol}{data.get('amountNoGrav') or 0:,.2f}" if data.get('amountNoGrav') is not None else "No detectado",
-                data.get('confidence', {}).get('amount_no_grav', 0.85)
+                amount_no_grav_text,
+                amount_no_grav_confidence
             )
         
         # Items/Líneas
@@ -1104,7 +1111,7 @@ with tab2:
                     "Descripción": item.get('description', ''),
                     "Cantidad": item.get('quantity', 0),
                     "Precio Unit.": f"{currency_symbol}{item.get('unit_price', 0):,.2f}",
-                    "Descuento": f"{currency_symbol}{abs(item.get('discount', 0)):,.2f}" if item.get('discount') else "No aplica",
+                    "Descuento": f"{currency_symbol}{abs(item.get('discount', 0)):,.2f}",
                     "Total": f"{currency_symbol}{item.get('total', 0):,.2f}"
                 })
             
