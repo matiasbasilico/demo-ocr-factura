@@ -26,25 +26,17 @@ def extract_invoice_with_claude(pdf_text, api_key=None):
     
     client = anthropic.Anthropic(api_key=api_key)
     
-    prompt = f"""Eres un experto en análisis de documentos comerciales (facturas y proformas). Analiza el siguiente texto y extrae TODA la información relevante.
+    prompt = f"""Eres un experto en análisis de facturas internacionales. Analiza el siguiente texto extraído de una factura y extrae TODA la información relevante.
 
-TEXTO DEL DOCUMENTO:
+TEXTO DE LA FACTURA:
 {pdf_text}
 
 INSTRUCCIONES CRÍTICAS:
-1. **DETECTA EL TIPO DE DOCUMENTO PRIMERO:**
-   - Si contiene: "Factura", "CUIT", "CAE", "AFIP" → es una FACTURA
-   - Si contiene: "Remito nº", "Fecha de Remito", "Sucursal Nº", columnas tabulares → es una PROFORMA
-   - Si no estás seguro, analiza el contenido y estructura
-
-2. Extrae TODOS los campos que encuentres según el tipo de documento
-3. NO inventes datos - solo extrae lo que realmente está en el texto
-4. Sé MUY PRECISO con números y fechas
-5. Para cada campo importante, indica tu nivel de confianza (0.0 a 1.0)
-
-═══════════════════════════════════════════════════════════════════════
-TIPO 1: FACTURAS (mantener toda la lógica anterior)
-═══════════════════════════════════════════════════════════════════════
+1. Extrae TODOS los campos que encuentres
+2. NO inventes datos - solo extrae lo que realmente está en el texto
+3. Sé MUY PRECISO con números y fechas
+4. Para cada campo importante, indica tu nivel de confianza (0.0 a 1.0)
+5. Explica brevemente cómo encontraste cada campo importante
 
 **DETECCIÓN AUTOMÁTICA DE MONEDA (MUY IMPORTANTE):**
 Analiza el idioma y contexto del documento para determinar la moneda:
@@ -71,173 +63,6 @@ Si el símbolo "$" aparece sin aclaración explícita:
 - Documento en inglés → USD
 - Documento en español con CUIT/AFIP/Argentina → ARS
 - Documento en español sin referencias argentinas → revisar país
-
-IMPORTANTE: 
-- Incluye "currency" con el código ISO (USD, ARS, EUR, etc)
-- Incluye "currencySymbol" con el símbolo visual ($, US$, €, etc)
-- En "reasoning.currency" explica DETALLADAMENTE por qué elegiste esa moneda
-
-═══════════════════════════════════════════════════════════════════════
-TIPO 2: PROFORMAS (nuevo tipo de documento)
-═══════════════════════════════════════════════════════════════════════
-
-Si el documento es una PROFORMA (listado de remitos/trabajos), extrae:
-
-**IDENTIFICACIÓN DE PROFORMA:**
-Busca estos indicadores:
-- Columnas: "Remito nº", "Fecha de Remito", "Sucursal Nº", "Nombre Sucursal", "Provincia", "Item nº", "Cantidad"
-- Palabras clave: "TOTAL $", "Descripción Item", "Importe Unitario", "Importe total"
-- Estructura tabular con múltiples remitos
-- Puede tener secciones: "PLANILLA_RTOS", "SUCURSALES", "PRECIARIO"
-
-**CAMPOS PRINCIPALES:**
-- documentType: "PROFORMA"
-- title: Extraer del nombre del archivo o primera línea (ej: "MACRO Trabajos en sucursales por obra")
-- totalAmount: Buscar "TOTAL $" seguido del monto (ej: "TOTAL $ 9,666,318.56")
-- currency: "ARS" (símbolo $, formato argentino)
-- dateGenerated: Buscar fecha en formato DD-MM-YYYY o en nombre de archivo
-- clientName: Buscar en el título o primera sección (ej: "MACRO")
-
-**PLANILLAS/SECCIONES DETECTADAS:**
-- sheetNames: Identificar secciones como:
-  * "PLANILLA_RTOS" o "PLANILLA RTOS" → listado de remitos con items
-  * "SUCURSALES" → listado de códigos y nombres de sucursales
-  * "PRECIARIO" → listado de items con precios unitarios
-  * Cualquier otra sección visible en el documento
-
-**ITEMS DE PROFORMA - SECCIÓN "PLANILLA_RTOS":**
-
-CRÍTICO: Extrae TODAS las filas de la tabla de remitos. Cada fila es un item.
-
-Estructura típica de cada línea:
-```
-106257    8/22/2025    930    AV SANTA FE BMA    AMBA    19    1
-```
-
-Mapeo de columnas:
-- Columna 1: remito_number (ej: "106257")
-- Columna 2: remito_date (ej: "8/22/2025" → convertir a "2025-08-22")
-- Columna 3: branch_number (ej: "930")
-- Columna 4: branch_name (ej: "AV SANTA FE BMA")
-- Columna 5: province (ej: "AMBA", "GRAN BS AS")
-- Columna 6: item_number (ej: "19", "32", "48")
-- Columna 7: quantity (ej: 1, 26, 152)
-
-**IMPORTANTE - RELACIONAR CON PRECIOS:**
-Los precios están en la sección "PRECIARIO" con formato:
-```
-19 - Normalización gral., incluye todas las tareas necesarias $ 39,557.58 $ 39,557.58
-```
-
-Mapeo:
-- Primera parte: item_number y description (ej: "19 - Normalización gral...")
-- Segunda parte: unit_price (ej: "$ 39,557.58")
-- Tercera parte: total_price (ej: "$ 39,557.58")
-
-Para cada item en PLANILLA_RTOS:
-1. Buscar el item_number en PRECIARIO
-2. Extraer description, unit_price del PRECIARIO
-3. Calcular total_price = unit_price × quantity
-4. Si el total_price ya está en PRECIARIO, usar ese valor
-
-**FORMATO DE CADA ITEM:**
-```json
-{
-  "remito_number": "106257",
-  "remito_date": "2025-08-22",
-  "branch_number": "930",
-  "branch_name": "AV SANTA FE BMA",
-  "province": "AMBA",
-  "item_number": "19",
-  "quantity": 1,
-  "description": "Normalización gral., incluye todas las tareas necesarias",
-  "unit_price": 39557.58,
-  "total_price": 39557.58
-}
-```
-
-**NOTAS:**
-- Si un remito tiene múltiples items, crear un objeto separado para cada línea
-- Convertir fechas de M/D/YYYY a YYYY-MM-DD
-- Remover símbolos "$" y "," de los montos antes de convertir a float
-- Si no encuentras el precio en PRECIARIO, dejar unit_price y total_price en 0
-
-═══════════════════════════════════════════════════════════════════════
-FORMATO DE RESPUESTA
-═══════════════════════════════════════════════════════════════════════
-
-**SI ES FACTURA**, responde con la estructura anterior de factura.
-
-**SI ES PROFORMA**, responde ÚNICAMENTE con un JSON válido (sin ```json, sin markdown) con esta estructura:
-
-{{
-  "documentType": "PROFORMA",
-  "title": "MACRO Trabajos en sucursales por obra 02-09-2025",
-  "totalAmount": 9666318.56,
-  "currency": "ARS",
-  "currencySymbol": "$",
-  "dateGenerated": "2025-09-02",
-  "clientName": "MACRO",
-  "sheetNames": ["PLANILLA_RTOS", "SUCURSALES", "PRECIARIO"],
-  "items": [
-    {{
-      "remito_number": "106257",
-      "remito_date": "2025-08-22",
-      "branch_number": "930",
-      "branch_name": "AV SANTA FE BMA",
-      "province": "AMBA",
-      "item_number": "19",
-      "quantity": 1,
-      "description": "Normalización gral., incluye todas las tareas necesarias",
-      "unit_price": 39557.58,
-      "total_price": 39557.58
-    }},
-    {{
-      "remito_number": "106257",
-      "remito_date": "2025-08-22",
-      "branch_number": "930",
-      "branch_name": "AV SANTA FE BMA",
-      "province": "AMBA",
-      "item_number": "32",
-      "quantity": 1,
-      "description": "Viaticos Zona 1 C.A.B.A y Conurbano hasta 50km",
-      "unit_price": 25633.31,
-      "total_price": 25633.31
-    }},
-    {{
-      "remito_number": "106036",
-      "remito_date": "2025-08-25",
-      "branch_number": "480",
-      "branch_name": "AVELLANEDA BMA",
-      "province": "GRAN BS AS",
-      "item_number": "21",
-      "quantity": 2,
-      "description": "Intervención en cámara (incluye cambio de lente)",
-      "unit_price": 14384.57,
-      "total_price": 28769.14
-    }}
-  ],
-  "summary": {{
-    "total_remitos": 15,
-    "total_items": 85,
-    "total_amount": 9666318.56,
-    "unique_branches": 12,
-    "date_range": "2025-08-13 to 2025-08-29"
-  }},
-  "confidence": {{
-    "document_type": 0.99,
-    "total_amount": 0.98,
-    "items_extraction": 0.95,
-    "price_matching": 0.92
-  }},
-  "reasoning": {{
-    "document_type": "Detecté PROFORMA porque tiene: (1) columnas 'Remito nº', 'Fecha de Remito', 'Sucursal Nº', etc., (2) secciones PLANILLA_RTOS, SUCURSALES, PRECIARIO, (3) formato tabular con múltiples remitos",
-    "total_amount": "Encontré 'TOTAL $ 9,666,318.56' en página 17 del documento",
-    "currency": "Detecté ARS porque: (1) símbolo $, (2) formato argentino (ej: 9,666,318.56), (3) referencias a provincias argentinas (AMBA, GRAN BS AS), (4) nombres de sucursales argentinas",
-    "items": "Extraje 85 líneas de PLANILLA_RTOS (páginas 1-3) y relacioné con precios del PRECIARIO (páginas 17-19). Cada línea tiene remito, sucursal, item y cantidad.",
-    "price_matching": "Relacioné items con PRECIARIO: Item 19 → $39,557.58, Item 32 → $25,633.31, Item 48 → $6,534.28, etc."
-  }}
-}}
 
 IMPORTANTE: 
 - Incluye "currency" con el código ISO (USD, ARS, EUR, etc)
@@ -451,44 +276,25 @@ REGLAS IMPORTANTES:
         if not isinstance(result, dict):
             raise ValueError("La respuesta no es un diccionario válido")
         
-        # Detectar tipo de documento
-        doc_type = result.get('documentType', 'FACTURA')
+        # Asegurar que tenga las claves mínimas
+        if 'supplier' not in result:
+            result['supplier'] = {}
+        if 'client' not in result:
+            result['client'] = {}
+        if 'confidence' not in result:
+            result['confidence'] = {}
+        if 'reasoning' not in result:
+            result['reasoning'] = {}
+        if 'ivaBreakdown' not in result:
+            result['ivaBreakdown'] = {}
+        if 'items' not in result:
+            result['items'] = []
         
-        if doc_type == 'PROFORMA':
-            # Validar estructura de proforma
-            if 'items' not in result:
-                result['items'] = []
-            if 'confidence' not in result:
-                result['confidence'] = {}
-            if 'reasoning' not in result:
-                result['reasoning'] = {}
-            if 'summary' not in result:
-                result['summary'] = {}
-            
-            # Asegurar moneda
-            if 'currency' not in result:
-                result['currency'] = 'ARS'
-                result['currencySymbol'] = '$'
-        else:
-            # Es una factura - validar estructura de factura
-            if 'supplier' not in result:
-                result['supplier'] = {}
-            if 'client' not in result:
-                result['client'] = {}
-            if 'confidence' not in result:
-                result['confidence'] = {}
-            if 'reasoning' not in result:
-                result['reasoning'] = {}
-            if 'ivaBreakdown' not in result:
-                result['ivaBreakdown'] = {}
-            if 'items' not in result:
-                result['items'] = []
-            
-            # Asegurar que tenga moneda (default ARS si no detecta)
-            if 'currency' not in result:
-                result['currency'] = 'ARS'
-                result['currencySymbol'] = '$'
-                result['reasoning']['currency'] = 'No se pudo determinar con certeza, asumiendo ARS por defecto'
+        # Asegurar que tenga moneda (default ARS si no detecta)
+        if 'currency' not in result:
+            result['currency'] = 'ARS'
+            result['currencySymbol'] = '$'
+            result['reasoning']['currency'] = 'No se pudo determinar con certeza, asumiendo ARS por defecto'
         
         return result
         
