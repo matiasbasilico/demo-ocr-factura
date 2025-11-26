@@ -1107,43 +1107,48 @@ with tab2:
                 data.get('confidence', {}).get('due_date', 0.90)
             )
             
-            st.markdown(f"#### 💰 Montos ({currency})")
-            display_field_with_confidence(
-                "Total",
-                f"{currency_symbol}{data.get('amount') or 0:,.2f}" if data.get('amount') is not None else "No detectado",
-                data.get('confidence', {}).get('amount', 0.98)
-            )
-            display_field_with_confidence(
-                "IVA",
-                f"{currency_symbol}{data.get('iva') or 0:,.2f}" if data.get('iva') is not None else "No detectado",
-                data.get('confidence', {}).get('iva', 0.95)
-            )
 
-            display_field_with_confidence(
-                "Subtotal Gravado",
-                f"{currency_symbol}{data.get('amountGrav') or 0:,.2f}" if data.get('amountGrav') is not None else "No detectado",
-                data.get('confidence', {}).get('amount_grav', 0.90)
-            )
+
+            # Desglose de IVAs
+            iva_breakdown = data.get('ivaBreakdown', {})
+            if iva_breakdown and any(iva_breakdown.values()):
+                st.markdown("**📊 Desglose de IVAs Detectados:**")
+                
+                # Crear tabla de IVAs con montos en 2 columnas
+                iva_rates = [
+                    ('iva_0', '0%'),
+                    ('iva_2_5', '2.5%'),
+                    ('iva_5', '5%'),
+                    ('iva_10_5', '10.5%'),
+                    ('iva_21', '21%'),
+                    ('iva_27', '27%')
+                ]
+                
+                iva_cols = st.columns(2)
+                col_idx = 0
+                for iva_key, iva_label in iva_rates:
+                    iva_amount = iva_breakdown.get(iva_key, 0)
+                    if iva_amount and iva_amount > 0:
+                        with iva_cols[col_idx % 2]:
+                            iva_text = f"IVA {iva_label}"
+                            iva_value = f"{currency_symbol}{iva_amount:,.2f}"
+                            st.markdown(f"""
+                            <div class='field-box'>
+                                <strong>{iva_text}:</strong> {iva_value}<br>
+                                <span class='confidence-high'>✅ Detectado</span>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        col_idx += 1
             
-            # No Gravado con confianza 0% si no se detecta
-            amount_no_grav_value = data.get('amountNoGrav')
-            amount_no_grav_text = f"{currency_symbol}{amount_no_grav_value or 0:,.2f}" if amount_no_grav_value is not None else "No detectado"
-            amount_no_grav_confidence = 0 if "No detectado" in amount_no_grav_text else data.get('confidence', {}).get('amount_no_grav', 0.85)
-            
-            display_field_with_confidence(
-                "No Gravado",
-                amount_no_grav_text,
-                amount_no_grav_confidence
-            )
-        
-        # Items/Líneas
-        if data.get('items'):
-            st.markdown("""
-            <div class="section-group">
-                <div class="section-title">📦 Items de la Factura</div>
-            </div>
-            """, unsafe_allow_html=True)
-            
+            # Otros Tributos si existen
+            other_taxes = data.get('otherTaxes', 0)
+            if other_taxes and other_taxes > 0:
+                display_field_with_confidence(
+                    "Otros Tributos",
+                    f"{currency_symbol}{other_taxes:,.2f}",
+                    data.get('confidence', {}).get('other_taxes', 0.85)
+                )
+
             items_df = []
             for i, item in enumerate(data['items'], 1):
                 row = {
