@@ -595,7 +595,6 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 📊 Estadísticas")
-    st.metric("Facturas procesadas", len(st.session_state.messages) // 2)
     
     # Mostrar moneda detectada si hay datos
     if st.session_state.extracted_data:
@@ -749,31 +748,57 @@ with tab1:
         # Sugerencias de preguntas
         st.markdown("#### 💡 Preguntas sugeridas:")
         col1, col2, col3 = st.columns(3)
-        
         with col1:
-            if st.button("¿Qué tan seguro estás del CUIT?", use_container_width=True):
+            if st.button("¿Qué tan seguro estás del CUIT?", use_container_width=True, key="btn_cuit"):
+                # Agregar ambos mensajes
                 st.session_state.messages.append({
                     "role": "user",
                     "content": "¿Qué tan seguro estás del CUIT del proveedor?"
                 })
+                response = generate_chat_response(
+                    "¿Qué tan seguro estás del CUIT del proveedor?",
+                    st.session_state.extracted_data,
+                    st.session_state.pdf_text
+                )
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": response
+                })
                 st.rerun()
-        
+
         with col2:
-            if st.button("Explícame los montos y la moneda", use_container_width=True):
+            if st.button("Explícame los montos y la moneda", use_container_width=True, key="btn_montos"):
                 st.session_state.messages.append({
                     "role": "user",
                     "content": "Explícame cómo detectaste la moneda y los montos"
                 })
+                response = generate_chat_response(
+                    "Explícame cómo detectaste la moneda y los montos",
+                    st.session_state.extracted_data,
+                    st.session_state.pdf_text
+                )
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": response
+                })
                 st.rerun()
-        
+
         with col3:
-            if st.button("¿Hay algún campo dudoso?", use_container_width=True):
+            if st.button("¿Hay algún campo dudoso?", use_container_width=True, key="btn_dudoso"):
                 st.session_state.messages.append({
                     "role": "user",
                     "content": "¿Hay algún campo del que no estés seguro?"
                 })
+                response = generate_chat_response(
+                    "¿Hay algún campo del que no estés seguro?",
+                    st.session_state.extracted_data,
+                    st.session_state.pdf_text
+                )
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": response
+                })
                 st.rerun()
-
 with tab2:
     st.markdown("### 📋 Datos Extraídos de la Factura")
     
