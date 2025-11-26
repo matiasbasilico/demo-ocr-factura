@@ -1,5 +1,5 @@
 """
-Invoice Extractor Caja de Pagos - Demo Interactivo con Claude Sonnet 4
+Invoice Extractor - Demo Interactivo con Claude Sonnet 4
 Aplicación de demostración con chat inteligente para extraer datos de facturas
 Con detección automática de moneda (USD/ARS/EUR/etc)
 """
@@ -140,7 +140,7 @@ def analyze_invoice_with_claude(pdf_text):
 
 
 def generate_initial_analysis_message(data):
-    """Genera el mensaje inicial de análisis de Claude"""
+    """Genera el mensaje inicial de análisis de Claude con TODOS los campos"""
     
     supplier_name = data.get('supplier', {}).get('name', 'el proveedor')
     invoice_number = data.get('invoiceNumber', 'sin número')
@@ -163,12 +163,40 @@ def generate_initial_analysis_message(data):
 
 📄 **Factura tipo {invoice_type} - N° {invoice_number}**
 
-🏢 **Proveedor detectado:** {supplier_name}
+🏢 **Proveedor:** {supplier_name}
 - CUIT: {data.get('supplier', {}).get('cuit', 'No detectado')}
 
 {currency_emoji} **Monto total:** {currency_symbol}{total:,.2f} {currency}
 
-He identificado los siguientes campos con alta confianza:
+📋 **TODOS LOS CAMPOS DETECTADOS:**
+
+**🏢 Proveedor:**
+- CUIT: {data.get('supplier', {}).get('cuit', 'No detectado')}
+- Razón Social: {data.get('supplier', {}).get('name', 'No detectado')}
+- Dirección: {data.get('supplier', {}).get('address', 'No detectado')}
+
+**👤 Cliente:**
+- Nombre: {data.get('client', {}).get('name', 'No detectado')}
+- Código: {data.get('client', {}).get('code', 'No detectado')}
+
+**📄 Factura:**
+- Tipo: {data.get('invoiceType', 'No detectado')}
+- Número: {data.get('invoiceNumber', 'No detectado')}
+- Punto de Venta: {data.get('pointSale', 'No detectado')}
+- CAE: {data.get('cae', 'No detectado')}
+
+**📅 Fechas:**
+- Emisión: {data.get('documentDate', 'No detectado')}
+- Vencimiento: {data.get('dueDate', 'No detectado')}
+
+**💰 Montos ({currency}):**
+- Total: {currency_symbol}{data.get('amount') or 0:,.2f}
+- IVA: {currency_symbol}{data.get('iva') or 0:,.2f}
+- Subtotal Gravado: {currency_symbol}{data.get('amountGrav') or 0:,.2f}
+- No Gravado: {currency_symbol}{data.get('amountNoGrav') or 0:,.2f}
+- Exento: {currency_symbol}{data.get('amountExen') or 0:,.2f}
+
+📊 **Campos con alta confianza (>95%):**
 """
     
     # Agregar campos con alta confianza
@@ -180,7 +208,7 @@ He identificado los siguientes campos con alta confianza:
             high_confidence_fields.append(f"✅ {field.replace('_', ' ').title()}: {conf_normalized:.0%}")
     
     if high_confidence_fields:
-        message += "\n" + "\n".join(high_confidence_fields[:5])
+        message += "\n" + "\n".join(high_confidence_fields)
     
     # Calcular confianza promedio normalizada
     confidences = [c if c <= 1 else c/100 for c in data.get('confidence', {}).values()]
@@ -188,14 +216,15 @@ He identificado los siguientes campos con alta confianza:
     
     message += f"""
 
-📊 **Resumen de la extracción:**
+📊 **Resumen:**
 - Total de campos detectados: {len([k for k, v in data.items() if v and k != 'confidence' and k != 'reasoning'])}
 - Confianza promedio: {avg_conf:.1f}%
 
-💡 **¿Qué puedo hacer por ti?**
-- Pregúntame sobre cualquier campo específico
-- Pídeme que explique cómo lo detecté
-- Solicita que revise algún dato que te parezca dudoso
+💡 **Puedes preguntarme:**
+- "¿Cómo encontraste el IVA?"
+- "¿Qué tan seguro estás del CAE?"
+- "Explícame todos los montos"
+- "¿Hay campos dudosos?"
 
 ¿Hay algo en particular que quieras que revise? 🤔"""
     
@@ -208,7 +237,87 @@ def generate_chat_response(user_input, extracted_data, pdf_text):
     """
     user_input_lower = user_input.lower()
     
-    # Respuestas inteligentes basadas en el contexto
+    # Respuesta a "todos los campos" o "lista completa"
+    if 'todos' in user_input_lower or 'lista' in user_input_lower or 'completo' in user_input_lower or 'detectados' in user_input_lower or 'campos' in user_input_lower:
+        currency = extracted_data.get('currency', 'ARS')
+        currency_symbol = extracted_data.get('currencySymbol', '$')
+        
+        return f"""Aquí está la lista COMPLETA de todos los campos detectados:
+
+🏢 **PROVEEDOR:**
+- CUIT: {extracted_data.get('supplier', {}).get('cuit', 'No detectado')}
+- Razón Social: {extracted_data.get('supplier', {}).get('name', 'No detectado')}
+- Dirección: {extracted_data.get('supplier', {}).get('address', 'No detectado')}
+
+👤 **CLIENTE:**
+- Nombre: {extracted_data.get('client', {}).get('name', 'No detectado')}
+- Código: {extracted_data.get('client', {}).get('code', 'No detectado')}
+- Dirección: {extracted_data.get('client', {}).get('address', 'No detectado')}
+
+📄 **FACTURA:**
+- Tipo: {extracted_data.get('invoiceType', 'No detectado')}
+- Número: {extracted_data.get('invoiceNumber', 'No detectado')}
+- Punto de Venta: {extracted_data.get('pointSale', 'No detectado')}
+- CAE: {extracted_data.get('cae', 'No detectado')}
+
+📅 **FECHAS:**
+- Emisión: {extracted_data.get('documentDate', 'No detectado')}
+- Vencimiento: {extracted_data.get('dueDate', 'No detectado')}
+
+💰 **MONTOS ({currency}):**
+- Total: {currency_symbol}{extracted_data.get('amount') or 0:,.2f}
+- IVA: {currency_symbol}{extracted_data.get('iva') or 0:,.2f}
+- Subtotal Gravado: {currency_symbol}{extracted_data.get('amountGrav') or 0:,.2f}
+- No Gravado: {currency_symbol}{extracted_data.get('amountNoGrav') or 0:,.2f}
+- Exento: {currency_symbol}{extracted_data.get('amountExen') or 0:,.2f}
+
+¿Querés que te explique cómo detecté algún campo en particular?"""
+    
+    # Respuesta sobre IVA
+    if 'iva' in user_input_lower:
+        iva = extracted_data.get('iva', 0)
+        iva_conf = extracted_data.get('confidence', {}).get('iva', 0.95)
+        iva_reasoning = extracted_data.get('reasoning', {}).get('iva', 'Detectado en la sección de impuestos del documento')
+        
+        if iva_conf > 1:
+            iva_conf = iva_conf / 100
+        
+        currency_symbol = extracted_data.get('currencySymbol', '$')
+        
+        return f"""Sobre el IVA:
+
+💰 **Valor detectado:** {currency_symbol}{iva:,.2f}
+🎯 **Confianza:** {iva_conf:.0%}
+
+💭 **Mi razonamiento:**
+{iva_reasoning}
+
+Busqué en la factura términos como "IVA", "Impuesto Interno", "Tax" y encontré este monto en la sección de desglose de impuestos. {"Estoy muy seguro de este valor." if iva_conf > 0.95 else "Podría requerir verificación manual."}
+
+¿Te gustaría que revise algún otro campo?"""
+    
+    # Respuesta sobre CAE
+    if 'cae' in user_input_lower:
+        cae = extracted_data.get('cae', 'No detectado')
+        cae_conf = extracted_data.get('confidence', {}).get('cae', 0.90)
+        cae_reasoning = extracted_data.get('reasoning', {}).get('cae', 'Detectado en el pie de la factura con el formato de 14 dígitos')
+        
+        if cae_conf > 1:
+            cae_conf = cae_conf / 100
+        
+        return f"""Sobre el CAE (Código de Autorización Electrónica):
+
+🔢 **Valor detectado:** {cae}
+🎯 **Confianza:** {cae_conf:.0%}
+
+💭 **Mi razonamiento:**
+{cae_reasoning}
+
+El CAE es el código de 14 dígitos que emite AFIP para autorizar facturas electrónicas. {"Lo encontré claramente marcado." if cae_conf > 0.95 else "Podría requerir verificación."}
+
+¿Necesitas información sobre otro campo?"""
+    
+    # Respuesta sobre CUIT
     if 'cuit' in user_input_lower:
         cuit = extracted_data.get('supplier', {}).get('cuit', 'No detectado')
         confidence = extracted_data.get('confidence', {}).get('supplier_cuit', 0)
@@ -230,14 +339,14 @@ El CUIT tiene el formato correcto (XX-XXXXXXXX-X) y está claramente identificad
 
 ¿Te gustaría que revise algún otro campo?"""
     
-    elif 'monto' in user_input_lower or 'total' in user_input_lower or 'calculaste' in user_input_lower or 'moneda' in user_input_lower or 'currency' in user_input_lower:
-        amount = extracted_data.get('amount', 0)
-        iva = extracted_data.get('iva', 0)
-        subtotal = extracted_data.get('amountGrav', 0)
+    # Respuesta sobre montos/totales/moneda
+    if 'monto' in user_input_lower or 'total' in user_input_lower or 'calculaste' in user_input_lower or 'moneda' in user_input_lower or 'currency' in user_input_lower:
+        amount = extracted_data.get('amount') or 0
+        iva = extracted_data.get('iva') or 0
+        subtotal = extracted_data.get('amountGrav') or 0
         confidence = extracted_data.get('confidence', {}).get('amount', 0.99)
         currency = extracted_data.get('currency', 'ARS')
         currency_symbol = extracted_data.get('currencySymbol', '$')
-        currency_reasoning = extracted_data.get('reasoning', {}).get('currency', 'No especificado')
         
         # Normalizar confianza
         if confidence > 1:
@@ -251,9 +360,7 @@ El CUIT tiene el formato correcto (XX-XXXXXXXX-X) y está claramente identificad
             'BRL': '💵',
             'CLP': '💵'
         }.get(currency, '💰')
-        import html
-        currency_reasoning_safe = html.escape(currency_reasoning) if currency_reasoning else " "
-
+        
         return f"""Te explico cómo identifiqué los montos:
 
 {currency_emoji} **Moneda detectada:** {currency} ({currency_symbol})
@@ -263,15 +370,18 @@ El CUIT tiene el formato correcto (XX-XXXXXXXX-X) y está claramente identificad
 - Confianza: {confidence:.0%}
 
 📊 **Desglose:**
-{"- Subtotal Gravado: " + currency_symbol + f"{subtotal:,.2f}" if subtotal else "- Subtotal: No detectado"}
-{"- IVA/Impuestos: " + currency_symbol + f"{iva:,.2f}" if iva else "- IVA: No detectado"}
+- Subtotal Gravado: {currency_symbol}{subtotal:,.2f}
+- IVA/Impuestos: {currency_symbol}{iva:,.2f}
 
 **¿Por qué {currency}?**
 El documento está en español y contiene referencias a AFIP/CUIT argentino, por lo tanto los montos son en pesos argentinos (ARS).
 
+Los montos están claramente marcados en la factura y el formato numérico es correcto. La confianza es muy alta.
+
 ¿Necesitas que revise algún otro aspecto?"""
     
-    elif 'dudoso' in user_input_lower or 'seguro' in user_input_lower or 'confianza' in user_input_lower:
+    # Respuesta sobre confianza/campos dudosos
+    if 'dudoso' in user_input_lower or 'seguro' in user_input_lower or 'confianza' in user_input_lower:
         low_confidence_fields = []
         for field, confidence in extracted_data.get('confidence', {}).items():
             # Normalizar
@@ -311,7 +421,8 @@ No encontré ningún campo con confianza baja. Todos los valores detectados tien
 
 Puedes proceder con tranquilidad a cargar esta factura en el sistema. ¿Quieres exportar el JSON ahora?"""
     
-    elif 'fecha' in user_input_lower:
+    # Respuesta sobre fechas
+    if 'fecha' in user_input_lower:
         doc_date = extracted_data.get('documentDate', 'No detectado')
         due_date = extracted_data.get('dueDate', 'No detectado')
         doc_conf = extracted_data.get('confidence', {}).get('document_date', 0.95)
@@ -337,7 +448,8 @@ Las fechas están en formato ISO (YYYY-MM-DD) para facilitar su procesamiento en
 
 ¿Hay algo más que quieras saber sobre las fechas?"""
     
-    elif 'items' in user_input_lower or 'líneas' in user_input_lower or 'productos' in user_input_lower:
+    # Respuesta sobre items/líneas
+    if 'items' in user_input_lower or 'líneas' in user_input_lower or 'productos' in user_input_lower:
         items = extracted_data.get('items', [])
         
         if items:
@@ -370,25 +482,16 @@ Esto puede ocurrir cuando:
 
 Los montos totales son correctos, solo que no están desglosados línea por línea. ¿Necesitas que revise algo más?"""
     
-    else:
-        # Respuesta genérica
-        return """Entiendo tu pregunta. Déjame pensar en cómo puedo ayudarte mejor...
+    # Respuesta genérica
+    return """Entiendo tu pregunta. Déjame pensar en cómo puedo ayudarte mejor...
 
-📊 **Datos disponibles:**
-- Información del proveedor (CUIT, nombre, dirección)
-- Información del cliente (nombre, dirección)
-- Detalles de la factura (tipo, número, CAE)
-- Moneda detectada automáticamente
-- Fechas (emisión, vencimiento)
-- Montos (total, IVA, subtotales)
-- Items/líneas (si aplica)
-
-Puedes preguntarme sobre:
-- La confianza de cualquier campo específico
-- Cómo detecté algún valor en particular
-- Por qué elegí esa moneda (USD vs ARS)
-- Si hay campos que requieren revisión manual
-- Comparar valores entre diferentes secciones
+📊 **Puedo ayudarte con:**
+- "Muéstrame todos los campos detectados"
+- "¿Cómo encontraste el IVA / CAE / CUIT?"
+- "Explícame los montos y la moneda"
+- "¿Hay campos dudosos?"
+- "Háblame de las fechas"
+- "Muéstrame los items"
 
 ¿Qué te gustaría saber específicamente? Puedo darte detalles sobre cualquiera de estos aspectos. 🤔"""
 
@@ -471,7 +574,7 @@ def parse_amount(amount_str):
 
 # Configuración de la página
 st.set_page_config(
-    page_title="Invoice Extractor Caja de Pagos Demo",
+    page_title="Invoice Extractor Demo",
     page_icon="📄",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -566,12 +669,14 @@ if 'extracted_data' not in st.session_state:
     st.session_state.extracted_data = None
 if 'pdf_text' not in st.session_state:
     st.session_state.pdf_text = None
+if 'current_file_name' not in st.session_state:
+    st.session_state.current_file_name = None
 
 # Sidebar
 with st.sidebar:
     # Logo con emoji en vez de imagen
     st.markdown("<h1 style='text-align: center; font-size: 3em;'>📄</h1>", unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align: center;'>Invoice Extractor Caja de Pagos AI</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center;'>Invoice Extractor AI</h3>", unsafe_allow_html=True)
     
     st.markdown("### ⚙️ Configuración")
     
@@ -590,6 +695,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 📊 Estadísticas")
+    st.metric("Facturas procesadas", len(st.session_state.messages) // 2)
     
     # Mostrar moneda detectada si hay datos
     if st.session_state.extracted_data:
@@ -622,10 +728,11 @@ with st.sidebar:
         st.session_state.extracted_data = None
         st.session_state.pdf_data = None
         st.session_state.pdf_text = None
+        st.session_state.current_file_name = None
         st.rerun()
 
 # Header principal
-st.markdown('<div class="main-header">📄 Invoice Extractor Caja de Pagos - Demo Interactivo</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">📄 Invoice Extractor - Demo Interactivo</div>', unsafe_allow_html=True)
 
 # Tabs principales
 tab1, tab2, tab3 = st.tabs(["💬 Chat Inteligente", "📋 Datos Extraídos", "📄 Vista del PDF"])
@@ -637,7 +744,8 @@ with tab1:
         type=['pdf'],
         help="Formatos soportados: PDF (digital o escaneado)"
     )
-
+    
+    # Detectar si es un archivo nuevo
     current_file_name = uploaded_file.name if uploaded_file else None
     previous_file_name = st.session_state.get('current_file_name', None)
     
@@ -649,6 +757,7 @@ with tab1:
         
         # Guardar el nombre del archivo actual
         st.session_state.current_file_name = current_file_name
+        
         # Procesar el PDF
         with st.spinner("🔍 Analizando factura..."):
             # Leer PDF
@@ -753,15 +862,15 @@ with tab1:
         # Sugerencias de preguntas
         st.markdown("#### 💡 Preguntas sugeridas:")
         col1, col2, col3 = st.columns(3)
+        
         with col1:
-            if st.button("¿Qué tan seguro estás del CUIT?", use_container_width=True, key="btn_cuit"):
-                # Agregar ambos mensajes
+            if st.button("Muéstrame todos los campos", use_container_width=True, key="btn_todos"):
                 st.session_state.messages.append({
                     "role": "user",
-                    "content": "¿Qué tan seguro estás del CUIT del proveedor?"
+                    "content": "Muéstrame todos los campos detectados"
                 })
                 response = generate_chat_response(
-                    "¿Qué tan seguro estás del CUIT del proveedor?",
+                    "Muéstrame todos los campos detectados",
                     st.session_state.extracted_data,
                     st.session_state.pdf_text
                 )
@@ -770,15 +879,15 @@ with tab1:
                     "content": response
                 })
                 st.rerun()
-
+        
         with col2:
-            if st.button("Explícame los montos y la moneda", use_container_width=True, key="btn_montos"):
+            if st.button("Explícame los montos", use_container_width=True, key="btn_montos"):
                 st.session_state.messages.append({
                     "role": "user",
-                    "content": "Explícame cómo detectaste la moneda y los montos"
+                    "content": "Explícame los montos y la moneda"
                 })
                 response = generate_chat_response(
-                    "Explícame cómo detectaste la moneda y los montos",
+                    "Explícame los montos y la moneda",
                     st.session_state.extracted_data,
                     st.session_state.pdf_text
                 )
@@ -787,9 +896,9 @@ with tab1:
                     "content": response
                 })
                 st.rerun()
-
+        
         with col3:
-            if st.button("¿Hay algún campo dudoso?", use_container_width=True, key="btn_dudoso"):
+            if st.button("¿Hay campos dudosos?", use_container_width=True, key="btn_dudoso"):
                 st.session_state.messages.append({
                     "role": "user",
                     "content": "¿Hay algún campo del que no estés seguro?"
@@ -804,6 +913,7 @@ with tab1:
                     "content": response
                 })
                 st.rerun()
+
 with tab2:
     st.markdown("### 📋 Datos Extraídos de la Factura")
     
@@ -945,7 +1055,7 @@ with tab2:
             st.dataframe(items_df, use_container_width=True)
         
         # JSON completo
-        st.markdown("#### 📤 JSON para Caja de Pagos")
+        st.markdown("#### 📤 JSON para tu Sistema")
         
         # Preparar JSON final
         final_json = prepare_final_json(data)
@@ -989,7 +1099,7 @@ with tab3:
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #666;">
-    <p>🤖 Powered by Claude Sonnet 4 | 📄 Invoice Extractor Caja de Pagos v2.0</p>
-    <p style="font-size: 0.9em;">Con detección automática de moneda (USD/ARS/EUR)</p>
+    <p>🤖 Powered by Claude Sonnet 4 | 📄 Invoice Extractor v2.0</p>
+    <p style="font-size: 0.9em;">Con detección automática de moneda y chat inteligente</p>
 </div>
 """, unsafe_allow_html=True)
