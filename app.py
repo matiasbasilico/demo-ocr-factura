@@ -996,30 +996,35 @@ with tab2:
         if currency_reasoning:
             st.info(f"💭 **¿Cómo detecté la moneda?** {currency_reasoning}")
         
-        # INFORMACIÓN DEL PROVEEDOR - VERTICAL
+        # INFORMACIÓN DEL PROVEEDOR - 2 COLUMNAS DENTRO DEL GRUPO
         st.markdown("""
         <div class="section-group">
             <div class="section-title">🏢 Información del Proveedor</div>
         </div>
         """, unsafe_allow_html=True)
         
-        display_field_with_confidence(
-            "CUIT", 
-            data.get('supplier', {}).get('cuit', 'No detectado'),
-            data.get('confidence', {}).get('supplier_cuit', 0.95)
-        )
-        display_field_with_confidence(
-            "Razón Social",
-            data.get('supplier', {}).get('name', 'No detectado'),
-            data.get('confidence', {}).get('supplier_name', 0.90)
-        )
+        col1, col2 = st.columns(2)
+        with col1:
+            display_field_with_confidence(
+                "CUIT", 
+                data.get('supplier', {}).get('cuit', 'No detectado'),
+                data.get('confidence', {}).get('supplier_cuit', 0.95)
+            )
+        with col2:
+            display_field_with_confidence(
+                "Razón Social",
+                data.get('supplier', {}).get('name', 'No detectado'),
+                data.get('confidence', {}).get('supplier_name', 0.90)
+            )
+        
+        # Dirección en ancho completo
         display_field_with_confidence(
             "Dirección",
             data.get('supplier', {}).get('address', 'No detectado'),
             data.get('confidence', {}).get('supplier_address', 0.85)
         )
         
-        # INFORMACIÓN DEL CLIENTE - VERTICAL
+        # INFORMACIÓN DEL CLIENTE
         if data.get('client', {}).get('name'):
             st.markdown("""
             <div class="section-group">
@@ -1027,91 +1032,111 @@ with tab2:
             </div>
             """, unsafe_allow_html=True)
             
-            display_field_with_confidence(
-                "Nombre",
-                data.get('client', {}).get('name', 'No detectado'),
-                data.get('confidence', {}).get('client_name', 0.90)
-            )
-            if data.get('client', {}).get('code'):
+            col1, col2 = st.columns(2)
+            with col1:
                 display_field_with_confidence(
-                    "Código",
-                    data.get('client', {}).get('code', 'No detectado'),
-                    0.95
+                    "Nombre",
+                    data.get('client', {}).get('name', 'No detectado'),
+                    data.get('confidence', {}).get('client_name', 0.90)
                 )
+            with col2:
+                if data.get('client', {}).get('code'):
+                    display_field_with_confidence(
+                        "Código",
+                        data.get('client', {}).get('code', 'No detectado'),
+                        0.95
+                    )
         
-        # INFORMACIÓN DE LA FACTURA - VERTICAL
+        # INFORMACIÓN DE LA FACTURA
         st.markdown("""
         <div class="section-group">
             <div class="section-title">📄 Información de la Factura</div>
         </div>
         """, unsafe_allow_html=True)
         
-        display_field_with_confidence(
-            "Tipo",
-            data.get('invoiceType', 'No detectado'),
-            data.get('confidence', {}).get('invoice_type', 0.98)
-        )
-        display_field_with_confidence(
-            "Número",
-            data.get('invoiceNumber', 'No detectado'),
-            data.get('confidence', {}).get('invoice_number', 0.95)
-        )
-        display_field_with_confidence(
-            "Punto de Venta",
-            data.get('pointSale', 'No detectado'),
-            data.get('confidence', {}).get('point_sale', 0.90)
-        )
-        display_field_with_confidence(
-            "CAE",
-            data.get('cae', 'No detectado'),
-            data.get('confidence', {}).get('cae', 0.92)
-        )
+        col1, col2 = st.columns(2)
+        with col1:
+            display_field_with_confidence(
+                "Tipo",
+                data.get('invoiceType', 'No detectado'),
+                data.get('confidence', {}).get('invoice_type', 0.98)
+            )
+        with col2:
+            display_field_with_confidence(
+                "Número",
+                data.get('invoiceNumber', 'No detectado'),
+                data.get('confidence', {}).get('invoice_number', 0.95)
+            )
         
-        # FECHAS - VERTICAL
+        col1, col2 = st.columns(2)
+        with col1:
+            display_field_with_confidence(
+                "Punto de Venta",
+                data.get('pointSale', 'No detectado'),
+                data.get('confidence', {}).get('point_sale', 0.90)
+            )
+        with col2:
+            display_field_with_confidence(
+                "CAE",
+                data.get('cae', 'No detectado'),
+                data.get('confidence', {}).get('cae', 0.92)
+            )
+        
+        # FECHAS
         st.markdown("""
         <div class="section-group">
             <div class="section-title">📅 Fechas</div>
         </div>
         """, unsafe_allow_html=True)
         
-        display_field_with_confidence(
-            "Fecha de Emisión",
-            data.get('documentDate', 'No detectado'),
-            data.get('confidence', {}).get('document_date', 0.95)
-        )
-        display_field_with_confidence(
-            "Fecha de Vencimiento",
-            data.get('dueDate', 'No detectado'),
-            data.get('confidence', {}).get('due_date', 0.90)
-        )
+        col1, col2 = st.columns(2)
+        with col1:
+            display_field_with_confidence(
+                "Fecha de Emisión",
+                data.get('documentDate', 'No detectado'),
+                data.get('confidence', {}).get('document_date', 0.95)
+            )
+        with col2:
+            display_field_with_confidence(
+                "Fecha de Vencimiento",
+                data.get('dueDate', 'No detectado'),
+                data.get('confidence', {}).get('due_date', 0.90)
+            )
         
-        # MONTOS - VERTICAL
+        # MONTOS
         st.markdown(f"""
         <div class="section-group">
             <div class="section-title">💰 Montos ({currency})</div>
         </div>
         """, unsafe_allow_html=True)
         
-        display_field_with_confidence(
-            "Total",
-            f"{currency_symbol}{data.get('amount') or 0:,.2f}" if data.get('amount') is not None else "No detectado",
-            data.get('confidence', {}).get('amount', 0.98)
-        )
-        display_field_with_confidence(
-            "IVA",
-            f"{currency_symbol}{data.get('iva') or 0:,.2f}" if data.get('iva') is not None else "No detectado",
-            data.get('confidence', {}).get('iva', 0.95)
-        )
-        display_field_with_confidence(
-            "Subtotal Gravado",
-            f"{currency_symbol}{data.get('amountGrav') or 0:,.2f}" if data.get('amountGrav') is not None else "No detectado",
-            data.get('confidence', {}).get('amount_grav', 0.90)
-        )
-        display_field_with_confidence(
-            "No Gravado",
-            f"{currency_symbol}{data.get('amountNoGrav') or 0:,.2f}" if data.get('amountNoGrav') is not None else "No detectado",
-            data.get('confidence', {}).get('amount_no_grav', 0.85)
-        )
+        col1, col2 = st.columns(2)
+        with col1:
+            display_field_with_confidence(
+                "Total",
+                f"{currency_symbol}{data.get('amount') or 0:,.2f}" if data.get('amount') is not None else "No detectado",
+                data.get('confidence', {}).get('amount', 0.98)
+            )
+        with col2:
+            display_field_with_confidence(
+                "IVA",
+                f"{currency_symbol}{data.get('iva') or 0:,.2f}" if data.get('iva') is not None else "No detectado",
+                data.get('confidence', {}).get('iva', 0.95)
+            )
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            display_field_with_confidence(
+                "Subtotal Gravado",
+                f"{currency_symbol}{data.get('amountGrav') or 0:,.2f}" if data.get('amountGrav') is not None else "No detectado",
+                data.get('confidence', {}).get('amount_grav', 0.90)
+            )
+        with col2:
+            display_field_with_confidence(
+                "No Gravado",
+                f"{currency_symbol}{data.get('amountNoGrav') or 0:,.2f}" if data.get('amountNoGrav') is not None else "No detectado",
+                data.get('confidence', {}).get('amount_no_grav', 0.85)
+            )
         
         # Items/Líneas
         if data.get('items'):
