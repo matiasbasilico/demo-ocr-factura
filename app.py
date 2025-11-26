@@ -15,33 +15,37 @@ import PyPDF2
 
 def analyze_invoice_with_claude(pdf_text):
     """
-    Analiza la factura usando Claude API directamente.
-    En un entorno real, esto haría una llamada real a la API de Claude.
+    Analiza la factura - intenta usar Claude API real, sino fallback a regex
     """
-    # Simular análisis (en producción, esto llamaría a Claude API)
-    # Por ahora, detectamos patrones del texto
-    
-    import re
-    
-    result = {
-        'supplier': {},
-        'invoiceType': None,
-        'invoiceNumber': None,
-        'pointSale': None,
-        'documentDate': None,
-        'dueDate': None,
-        'amount': 0,
-        'iva': 0,
-        'amountGrav': 0,
-        'amountNoGrav': 0,
-        'amountExen': 0,
-        'cae': None,
-        'taxCode': None,
-        'items': [],
-        'confidence': {},
-        'reasoning': {}
-    }
-    
+    try:
+        # Intentar con Claude API real (inteligente)
+        from claude_ocr import extract_invoice_with_claude
+        result = extract_invoice_with_claude(pdf_text)
+        return result
+    except Exception as e:
+        st.warning(f"⚠️ Claude API no disponible, usando modo regex básico: {str(e)}")
+        
+        # Fallback: código regex básico
+        import re
+        result = {
+            'supplier': {},
+            'client': {},
+            'invoiceType': None,
+            'invoiceNumber': None,
+            'pointSale': None,
+            'documentDate': None,
+            'dueDate': None,
+            'amount': 0,
+            'iva': 0,
+            'amountGrav': 0,
+            'amountNoGrav': 0,
+            'amountExen': 0,
+            'cae': None,
+            'items': [],
+            'confidence': {},
+            'reasoning': {}
+        }
+        
     # CUIT del proveedor
     cuit_match = re.search(r'CUIT[:\s]+(\d{2}-\d{8}-\d{1})', pdf_text)
     if cuit_match:
