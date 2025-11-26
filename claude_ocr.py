@@ -67,6 +67,15 @@ IMPORTANTE:
 - Incluye "currencySymbol" con el símbolo visual ($, US$, €, etc)
 - En "reasoning.currency" explica DETALLADAMENTE por qué elegiste esa moneda
 
+**IMPORTANTE - TIPO DE FACTURA ARGENTINA (CÓDIGOS AFIP):**
+En Argentina existen estos tipos de factura:
+- CÓDIGO AFIP 01 → Factura Tipo A (RI vende a RI)
+- CÓDIGO AFIP 06 → Factura Tipo B (RI vende a No RI / Consumidor)
+- CÓDIGO AFIP 11 → Factura Tipo C (Monotributista)
+
+Busca el "Código" con números de dos dígitos (01, 06, 11, etc) y traduce al tipo de letra correspondiente.
+Si ves "Factura A", "Factura B", "Factura C" directamente, usa ese valor.
+
 CAMPOS A BUSCAR (extrae todos los que encuentres):
 
 **PROVEEDOR (quien emite la factura):**
@@ -126,31 +135,29 @@ Responde ÚNICAMENTE con un JSON válido (sin ```json, sin markdown, sin explica
   }},
   "currency": "ARS",
   "currencySymbol": "$",
-  "invoiceType": "B",
-  "invoiceNumber": "1305-76453547",
-  "pointSale": "1305",
-  "cae": "73347774383997",
-  "documentDate": "2023-08-22",
-  "dueDate": "2023-09-14",
+  "invoiceType": "A",
+  "invoiceNumber": "0002-01138243",
+  "pointSale": "0002",
+  "cae": "73462440019273",
+  "documentDate": "2023-11-17",
+  "dueDate": "2023-11-27",
   "billingPeriod": {{
-    "from": "2023-07-23",
-    "to": "2023-08-22"
+    "from": "2023-11-17",
+    "to": "2023-11-17"
   }},
-  "amount": 9136.40,
-  "iva": 205.40,
-  "amountGrav": 8040.42,
+  "amount": 37722.96,
+  "iva": 6546.96,
+  "amountGrav": 31176.00,
   "amountNoGrav": 0,
   "amountExen": 0,
-  "otherTaxes": [
-    {{"name": "Perc. IIBB Salta", "amount": 890.55}}
-  ],
+  "otherTaxes": [],
   "items": [
     {{
-      "description": "Plan Control 1GB PC90R",
-      "quantity": 3,
-      "unit_price": 3050.00,
-      "total": 11071.50,
-      "discount": -5535.78
+      "description": "Web Hosting Emprendedor...",
+      "quantity": 1,
+      "unit_price": 4676.40,
+      "total": 4676.40,
+      "discount": 0
     }}
   ],
   "confidence": {{
@@ -158,20 +165,21 @@ Responde ÚNICAMENTE con un JSON válido (sin ```json, sin markdown, sin explica
     "supplier_name": 0.95,
     "client_name": 0.92,
     "invoice_number": 0.99,
+    "invoice_type": 0.95,
     "amount": 0.99,
     "currency": 0.95
   }},
   "reasoning": {{
-    "supplier_name": "Encontré 'AMX ARGENTINA S.A.' en el encabezado como emisor de la factura",
-    "client_name": "Identificado 'ASOCIACION CULTURAL Y DEPORTI' como el destinatario/cliente",
-    "amount": "Total de $9,136.40 claramente marcado como 'Total a Pagar' al final del documento",
-    "currency": "Detecté ARS (pesos argentinos) porque: (1) documento completamente en español, (2) contiene CUIT argentino 30-66328849-7, (3) referencia a AFIP y CAE, (4) ubicación en Argentina. Si fuera USD, el documento estaría en inglés o tendría 'USD' explícito."
+    "supplier_name": "Encontré 'Dattatec.com S.R.L.' en el encabezado",
+    "invoice_type": "Encontré 'Código 01' que corresponde a Factura Tipo A según AFIP",
+    "amount": "Total de $37,722.96 claramente marcado como 'TOTAL $'",
+    "currency": "Detecté ARS porque: (1) documento en español, (2) CUIT argentino, (3) CAE presente"
   }}
 }}
 
 REGLAS IMPORTANTES:
 - Fechas SIEMPRE en formato YYYY-MM-DD
-- Montos como números float (ej: 9136.40), NO strings
+- Montos como números float (ej: 37722.96), NO strings
 - Si un campo no existe en el documento, usa null
 - NO inventes información que no esté en el texto
 - La confianza debe reflejar qué tan seguro estás (0.0 = nada seguro, 1.0 = completamente seguro)
@@ -237,13 +245,16 @@ REGLAS IMPORTANTES:
 def test_extraction():
     """Función de prueba"""
     sample_text = """
-    AMX ARGENTINA S.A.
-    CUIT: 30-66328849-7
-    Factura B Nro. 1305-76453547
-    Fecha: 22/08/2023
+    Dattatec.com S.R.L.
+    CUIT: 30-71017365-2
+    Factura A Nº 0002-01138243
+    Código 01
+    Fecha: 17/11/2023
     
-    Cliente: ASOCIACION CULTURAL Y DEPORTI
-    Total: $9,136.40
+    Cliente: omnihub sas
+    Total: $37,722.96
+    IVA: $6,546.96
+    CAE: 73462440019273
     """
     
     try:
