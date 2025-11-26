@@ -685,7 +685,7 @@ with st.sidebar:
     #    "Modo de operación:",
     #    ["🎭 Demo (Sin API)", "🚀 Producción (Con API)"],
     #    help="Demo usa Claude directamente en el navegador. Producción usa tu endpoint de AWS."
-    3)
+    #3)
     
     #if operation_mode == "🚀 Producción (Con API)":
     #    api_endpoint = st.text_input(
