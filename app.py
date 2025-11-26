@@ -436,6 +436,239 @@ El CAE es el código de 14 dígitos que emite AFIP para autorizar facturas elect
 
 ¿Necesitas información sobre otro campo?"""
     
+    # Respuesta sobre tipo de factura
+    if 'tipo' in user_input_lower and 'factura' in user_input_lower:
+        invoice_type = extracted_data.get('invoiceType', 'No detectado')
+        type_conf = extracted_data.get('confidence', {}).get('invoice_type', 0.95)
+        type_reasoning = extracted_data.get('reasoning', {}).get('invoice_type', 'Detectado por el código AFIP o la letra explícita en el documento')
+        
+        if type_conf > 1:
+            type_conf = type_conf / 100
+        
+        return f"""Sobre el Tipo de Factura:
+
+📄 **Tipo detectado:** Factura {invoice_type}
+🎯 **Confianza:** {type_conf:.0%}
+
+💭 **Mi razonamiento:**
+{type_reasoning}
+
+En Argentina, los tipos de factura son:
+- **Tipo A**: Responsable Inscripto vende a Responsable Inscripto (Código AFIP 01)
+- **Tipo B**: Responsable Inscripto vende a No RI o Consumidor Final (Código AFIP 06)
+- **Tipo C**: Monotributista (Código AFIP 11)
+
+{"Estoy muy seguro de este valor." if type_conf > 0.95 else "Podría requerir verificación manual."}
+
+¿Te gustaría saber sobre otro campo?"""
+    
+    # Respuesta sobre orden de compra (OC)
+    if ('orden' in user_input_lower and 'compra' in user_input_lower) or 'oc' in user_input_lower:
+        items = extracted_data.get('items', [])
+        oc_found = []
+        
+        for item in items:
+            if item.get('orden_compra') or item.get('oc'):
+                oc_val = item.get('orden_compra') or item.get('oc')
+                if oc_val not in oc_found:
+                    oc_found.append(oc_val)
+        
+        if oc_found:
+            oc_conf = extracted_data.get('confidence', {}).get('orden_compra', 0.95)
+            oc_reasoning = extracted_data.get('reasoning', {}).get('orden_compra', 'Encontrado en el detalle de items')
+            
+            if oc_conf > 1:
+                oc_conf = oc_conf / 100
+            
+            return f"""Sobre la Orden de Compra (OC):
+
+📋 **OC detectada(s):** {', '.join(oc_found)}
+🎯 **Confianza:** {oc_conf:.0%}
+
+💭 **Mi razonamiento:**
+{oc_reasoning}
+
+La Orden de Compra es el documento que autoriza la compra y suele aparecer referenciada en el detalle de los items de la factura. {"La encontré claramente." if oc_conf > 0.95 else "Podría requerir verificación."}
+
+¿Necesitas información sobre otro campo?"""
+        else:
+            return """Sobre la Orden de Compra (OC):
+
+❌ **No detecté ninguna Orden de Compra** en esta factura.
+
+Las OC suelen aparecer en el detalle de items con formatos como:
+- "OC: 1234567890"
+- "Orden de Compra: 1234567890"
+- "Purchase Order: 1234567890"
+
+Si sabes que debería estar, ¿podrías indicarme dónde buscar?"""
+    
+    # Respuesta sobre hoja de entrada de servicio (HES)
+    if ('hoja' in user_input_lower and 'servicio' in user_input_lower) or 'hes' in user_input_lower:
+        items = extracted_data.get('items', [])
+        hes_found = []
+        
+        for item in items:
+            if item.get('hoja_entrada_servicio') or item.get('hes'):
+                hes_val = item.get('hoja_entrada_servicio') or item.get('hes')
+                if hes_val not in hes_found:
+                    hes_found.append(hes_val)
+        
+        if hes_found:
+            hes_conf = extracted_data.get('confidence', {}).get('hoja_entrada_servicio', 0.95)
+            hes_reasoning = extracted_data.get('reasoning', {}).get('hoja_entrada_servicio', 'Encontrado en el detalle de items')
+            
+            if hes_conf > 1:
+                hes_conf = hes_conf / 100
+            
+            return f"""Sobre la Hoja de Entrada de Servicio (HES):
+
+📝 **HES detectada(s):** {', '.join(hes_found)}
+🎯 **Confianza:** {hes_conf:.0%}
+
+💭 **Mi razonamiento:**
+{hes_reasoning}
+
+La HES documenta la recepción conforme de un servicio prestado y suele aparecer en el detalle de items de la factura. {"La encontré claramente." if hes_conf > 0.95 else "Podría requerir verificación."}
+
+¿Necesitas información sobre otro campo?"""
+        else:
+            return """Sobre la Hoja de Entrada de Servicio (HES):
+
+❌ **No detecté ninguna HES** en esta factura.
+
+Las HES suelen aparecer en el detalle de items con formatos como:
+- "HES: 1234567890"
+- "Hoja de Entrada de Servicio: 1234567890"
+- "Service Entry Sheet: 1234567890"
+
+Si sabes que debería estar, ¿podrías indicarme dónde buscar?"""
+    
+    # Respuesta sobre hoja de entrada de materiales (HEM)
+    if ('hoja' in user_input_lower and 'material' in user_input_lower) or 'hem' in user_input_lower:
+        items = extracted_data.get('items', [])
+        hem_found = []
+        
+        for item in items:
+            if item.get('hoja_entrada_materiales') or item.get('hem'):
+                hem_val = item.get('hoja_entrada_materiales') or item.get('hem')
+                if hem_val not in hem_found:
+                    hem_found.append(hem_val)
+        
+        if hem_found:
+            hem_conf = extracted_data.get('confidence', {}).get('hoja_entrada_materiales', 0.95)
+            hem_reasoning = extracted_data.get('reasoning', {}).get('hoja_entrada_materiales', 'Encontrado en el detalle de items')
+            
+            if hem_conf > 1:
+                hem_conf = hem_conf / 100
+            
+            return f"""Sobre la Hoja de Entrada de Materiales (HEM):
+
+📦 **HEM detectada(s):** {', '.join(hem_found)}
+🎯 **Confianza:** {hem_conf:.0%}
+
+💭 **Mi razonamiento:**
+{hem_reasoning}
+
+La HEM documenta la recepción física de materiales o productos y suele aparecer en el detalle de items. {"La encontré claramente." if hem_conf > 0.95 else "Podría requerir verificación."}
+
+¿Necesitas información sobre otro campo?"""
+        else:
+            return """Sobre la Hoja de Entrada de Materiales (HEM):
+
+❌ **No detecté ninguna HEM** en esta factura.
+
+Las HEM suelen aparecer en el detalle de items con formatos como:
+- "HEM: 1234567890"
+- "Hoja de Entrada de Materiales: 1234567890"
+- "Material Entry Sheet: 1234567890"
+
+Si sabes que debería estar, ¿podrías indicarme dónde buscar?"""
+    
+    # Respuesta sobre número de factura
+    if 'número' in user_input_lower and 'factura' in user_input_lower:
+        invoice_number = extracted_data.get('invoiceNumber', 'No detectado')
+        number_conf = extracted_data.get('confidence', {}).get('invoice_number', 0.95)
+        number_reasoning = extracted_data.get('reasoning', {}).get('invoice_number', 'Detectado en el encabezado del documento')
+        
+        if number_conf > 1:
+            number_conf = number_conf / 100
+        
+        return f"""Sobre el Número de Factura:
+
+🔢 **Número detectado:** {invoice_number}
+🎯 **Confianza:** {number_conf:.0%}
+
+💭 **Mi razonamiento:**
+{number_reasoning}
+
+En Argentina, el número de factura tiene el formato XXXXX-XXXXXXXX donde la primera parte es el punto de venta y la segunda es el número secuencial. {"Estoy muy seguro de este valor." if number_conf > 0.95 else "Podría requerir verificación."}
+
+¿Te gustaría saber sobre otro campo?"""
+    
+    # Respuesta sobre punto de venta
+    if 'punto' in user_input_lower and 'venta' in user_input_lower:
+        point_sale = extracted_data.get('pointSale', 'No detectado')
+        point_conf = extracted_data.get('confidence', {}).get('point_sale', 0.90)
+        point_reasoning = extracted_data.get('reasoning', {}).get('point_sale', 'Extraído de la primera parte del número de factura')
+        
+        if point_conf > 1:
+            point_conf = point_conf / 100
+        
+        return f"""Sobre el Punto de Venta:
+
+🏪 **Punto de Venta detectado:** {point_sale}
+🎯 **Confianza:** {point_conf:.0%}
+
+💭 **Mi razonamiento:**
+{point_reasoning}
+
+El punto de venta identifica el lugar físico o virtual desde donde se emite la factura. {"Lo identifiqué claramente." if point_conf > 0.95 else "Podría requerir verificación."}
+
+¿Necesitas información sobre otro campo?"""
+    
+    # Respuesta sobre proveedor/razón social
+    if 'proveedor' in user_input_lower or ('razón' in user_input_lower and 'social' in user_input_lower):
+        supplier_name = extracted_data.get('supplier', {}).get('name', 'No detectado')
+        supplier_conf = extracted_data.get('confidence', {}).get('supplier_name', 0.90)
+        supplier_reasoning = extracted_data.get('reasoning', {}).get('supplier_name', 'Detectado en el encabezado del documento como emisor')
+        
+        if supplier_conf > 1:
+            supplier_conf = supplier_conf / 100
+        
+        return f"""Sobre el Proveedor:
+
+🏢 **Razón Social:** {supplier_name}
+🎯 **Confianza:** {supplier_conf:.0%}
+
+💭 **Mi razonamiento:**
+{supplier_reasoning}
+
+La razón social es el nombre legal del proveedor que emite la factura. {"Estoy muy seguro de este valor." if supplier_conf > 0.95 else "Podría requerir verificación."}
+
+¿Te gustaría saber sobre otro campo?"""
+    
+    # Respuesta sobre cliente
+    if 'cliente' in user_input_lower and 'como' in user_input_lower:
+        client_name = extracted_data.get('client', {}).get('name', 'No detectado')
+        client_conf = extracted_data.get('confidence', {}).get('client_name', 0.90)
+        client_reasoning = extracted_data.get('reasoning', {}).get('client_name', 'Detectado en la sección de datos del receptor')
+        
+        if client_conf > 1:
+            client_conf = client_conf / 100
+        
+        return f"""Sobre el Cliente:
+
+👤 **Cliente:** {client_name}
+🎯 **Confianza:** {client_conf:.0%}
+
+💭 **Mi razonamiento:**
+{client_reasoning}
+
+El cliente es la empresa o persona a quien se le emite la factura. {"Lo identifiqué claramente." if client_conf > 0.95 else "Podría requerir verificación."}
+
+¿Necesitas información sobre otro campo?"""
+    
     # Respuesta sobre CUIT
     if 'cuit' in user_input_lower:
         cuit = extracted_data.get('supplier', {}).get('cuit', 'No detectado')
@@ -604,15 +837,33 @@ Los montos totales son correctos, solo que no están desglosados línea por lín
     # Respuesta genérica
     return """Entiendo tu pregunta. Déjame pensar en cómo puedo ayudarte mejor...
 
-📊 **Puedo ayudarte con:**
-- "Muéstrame todos los campos detectados"
-- "¿Cómo encontraste el IVA / CAE / CUIT?"
+📊 **Puedo ayudarte con consultas específicas sobre:**
+
+**Campos generales:**
+- "¿Cómo encontraste el CUIT?"
+- "¿Cómo detectaste el tipo de factura?"
+- "¿Cómo encontraste el número de factura?"
+- "¿Cómo detectaste el punto de venta?"
+- "¿Cómo identificaste el proveedor?"
+- "¿Cómo identificaste el cliente?"
+- "¿Cómo encontraste el CAE?"
+
+**Montos e impuestos:**
+- "¿Cómo detectaste el IVA?"
 - "Explícame los montos y la moneda"
+- "Muéstrame los IVAs detectados"
+
+**Documentos asociados:**
+- "¿Cómo detectaste la orden de compra?" (OC)
+- "¿Cómo detectaste la hoja de entrada de servicio?" (HES)
+- "¿Cómo detectaste la hoja de entrada de materiales?" (HEM)
+
+**Vista general:**
+- "Muéstrame todos los campos detectados"
 - "¿Hay campos dudosos?"
 - "Háblame de las fechas"
-- "Muéstrame los items"
 
-¿Qué te gustaría saber específicamente? Puedo darte detalles sobre cualquiera de estos aspectos. 🤔"""
+¿Qué te gustaría saber específicamente? 🤔"""
 
 
 def display_field_with_confidence(label, value, confidence):
@@ -1013,7 +1264,7 @@ with tab1:
             else:
                 st.markdown(f"""
                 <div class="chat-message assistant-message">
-                    <b>🤖 Claude:</b><br>
+                    <b>🤖 CDP IA:</b><br>
                     {message["content"]}
                 </div>
                 """, unsafe_allow_html=True)
@@ -1037,7 +1288,7 @@ with tab1:
             </div>
             """, unsafe_allow_html=True)
             
-            # Generar respuesta de Claude con streaming
+            # Generar respuesta de CDP IA con streaming
             with st.chat_message("assistant"):
                 message_placeholder = st.empty()
                 
